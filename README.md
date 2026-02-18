@@ -183,7 +183,6 @@ SumaBasicaDocker/
 ├── script.js               # Lógica JavaScript (llama a /suma-n-digitos)
 ├── styles.css              # Estilos CSS con tema Kubernetes
 ├── proxy.py                # Servidor Flask que orquesta los pods
-├── docker-compose.yml      # (Obsoleto en esta rama, usado en master/DosDigitos)
 └── README.md               # Este archivo
 
 ## Comandos Útiles de Kubernetes
