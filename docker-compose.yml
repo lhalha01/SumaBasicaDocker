@@ -1,6 +1,12 @@
 services:
-  suma-api:
+  suma-unidades:
     image: ghcr.io/lhalha01/contenedores-backend:latest
     ports:
-      - "8000:8000"
+      - "8001:8000"
+    restart: unless-stopped
+    
+  suma-decenas:
+    image: ghcr.io/lhalha01/contenedores-backend:latest
+    ports:
+      - "8002:8000"
     restart: unless-stopped
