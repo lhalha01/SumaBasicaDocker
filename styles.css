@@ -240,7 +240,7 @@ h1 {
     gap: 10px;
     justify-content: center;
     margin-bottom: 15px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
 }
 
 .badge {
