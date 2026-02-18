@@ -235,11 +235,34 @@ def suma_n_digitos():
         print(f"Se necesitan {num_digitos} pod(s)")
         print(f"{'='*60}")
         
+        # Array para registrar eventos de escalado
+        eventos_escalado = []
+        
         # Escalar cada pod necesario
         for i in range(num_digitos):
+            inicio_escalado = time.time()
+            
+            # Registrar inicio de escalado
+            eventos_escalado.append({
+                'Tipo': 'escalado',
+                'Pod': f'suma-digito-{i}',
+                'Posicion': get_nombre_posicion(i),
+                'Estado': 'Escalando a 1 réplica',
+                'Timestamp': time.strftime('%H:%M:%S')
+            })
+            
             # Escalar a 1 réplica
             if not escalar_pod(i, 1):
                 raise Exception(f"No se pudo escalar el pod suma-digito-{i}")
+            
+            # Registrar espera
+            eventos_escalado.append({
+                'Tipo': 'espera',
+                'Pod': f'suma-digito-{i}',
+                'Posicion': get_nombre_posicion(i),
+                'Estado': 'Esperando pod Ready...',
+                'Timestamp': time.strftime('%H:%M:%S')
+            })
             
             # Esperar a que el pod esté listo
             if not esperar_pod_ready(i, timeout=60):
@@ -248,6 +271,16 @@ def suma_n_digitos():
             # Establecer port-forward para este pod
             if not establecer_port_forward(i):
                 raise Exception(f"No se pudo establecer port-forward para suma-digito-{i}")
+            
+            # Registrar completado
+            tiempo_escalado = round(time.time() - inicio_escalado, 2)
+            eventos_escalado.append({
+                'Tipo': 'listo',
+                'Pod': f'suma-digito-{i}',
+                'Posicion': get_nombre_posicion(i),
+                'Estado': f'✓ Listo ({tiempo_escalado}s)',
+                'Timestamp': time.strftime('%H:%M:%S')
+            })
         
         print(f"✓ Todos los pods necesarios están listos y accesibles\n")
         
@@ -312,7 +345,8 @@ def suma_n_digitos():
             'CarryOut': carry_in,
             'NumDigitos': num_digitos,
             'ContenedoresUsados': num_digitos,
-            'Details': detalles
+            'Details': detalles,
+            'EventosEscalado': eventos_escalado
         }
         
         response = make_response(jsonify(response_data), 200)

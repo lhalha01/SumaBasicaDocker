@@ -50,11 +50,18 @@
             </div>
         </div>
         
+        <div class="scaling-section">
+            <h3>⚙️ Evolución del Escalado Dinámico</h3>
+            <div id="scaling-log" class="scaling-log">
+                <p class="empty-message">Los eventos de escalado aparecerán aquí...</p>
+            </div>
+        </div>
+        
         <div class="legend-section">
             <h3>ℹ️ Información</h3>
             <ul>
                 <li><strong>Arquitectura:</strong> Kubernetes con 4 Deployments independientes</li>
-                <li><strong>Escalado:</strong> Cada pod maneja una posición de dígito</li>
+                <li><strong>Escalado Dinámico:</strong> Los pods se activan solo cuando se necesitan (scale-to-zero)</li>
                 <li><strong>Cascada:</strong> El CarryOut de un pod se conecta al CarryIn del siguiente</li>
                 <li><strong>NodePort:</strong> Pods expuestos en puertos 30000-30003</li>
             </ul>

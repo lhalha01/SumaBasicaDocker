@@ -14,6 +14,10 @@ async function sumar() {
         document.getElementById('pods-usados').textContent = '...';
         document.getElementById('carry-final').textContent = '...';
         
+        // Limpiar log de escalado y mostrar mensaje de carga
+        const scalingLog = document.getElementById('scaling-log');
+        scalingLog.innerHTML = '<p class="loading-message">⏳ Escalando pods necesarios...</p>';
+        
         // Llamar al servicio proxy que coordina los pods de Kubernetes
         const response = await fetch('http://localhost:8080/suma-n-digitos', {
             method: 'POST',
@@ -40,6 +44,9 @@ async function sumar() {
         
         // Renderizar los detalles de los pods
         renderPodDetails(data.Details);
+        
+        // Renderizar eventos de escalado
+        renderScalingEvents(data.EventosEscalado || []);
         
     } catch (error) {
         console.error('Error al realizar la suma:', error);
@@ -120,6 +127,45 @@ function renderPodDetails(details) {
             
             container.appendChild(arrow);
         }
+    });
+}
+
+function renderScalingEvents(eventos) {
+    const container = document.getElementById('scaling-log');
+    
+    if (!eventos || eventos.length === 0) {
+        container.innerHTML = '<p class="empty-message">No hay eventos de escalado disponibles</p>';
+        return;
+    }
+    
+    // Limpiar contenedor
+    container.innerHTML = '';
+    
+    eventos.forEach((evento, index) => {
+        const eventItem = document.createElement('div');
+        eventItem.className = `scaling-event scaling-event-${evento.Tipo}`;
+        
+        // Agregar animación de entrada con delay
+        eventItem.style.animationDelay = `${index * 0.1}s`;
+        
+        let icon = '⚙️';
+        if (evento.Tipo === 'listo') icon = '✅';
+        else if (evento.Tipo === 'espera') icon = '⏳';
+        else if (evento.Tipo === 'escalado') icon = '🚀';
+        
+        eventItem.innerHTML = `
+            <span class="scaling-icon">${icon}</span>
+            <div class="scaling-content">
+                <div class="scaling-header">
+                    <strong>${evento.Pod}</strong>
+                    <span class="scaling-position">(${evento.Posicion})</span>
+                </div>
+                <div class="scaling-status">${evento.Estado}</div>
+                <div class="scaling-time">${evento.Timestamp}</div>
+            </div>
+        `;
+        
+        container.appendChild(eventItem);
     });
 }
 
