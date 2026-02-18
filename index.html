@@ -3,25 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calculadora 2 Dígitos - Cascada</title>
+    <title>Calculadora N Dígitos - Kubernetes</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
-        <h1>Calculadora con Cascada de Contenedores</h1>
-        <p class="subtitle">Suma números de 2 dígitos (0-99) usando 2 contenedores enlazados</p>
+        <h1>🚀 Calculadora con Kubernetes</h1>
+        <p class="subtitle">Suma números de hasta 4 dígitos (0-9999) usando pods en cascada</p>
         
         <div class="input-section">
             <div class="input-group">
-                <label for="numeroA">Número A (0-99):</label>
-                <input type="number" id="numeroA" min="0" max="99" value="0" class="number-input">
+                <label for="numeroA">Número A (0-9999):</label>
+                <input type="number" id="numeroA" min="0" max="9999" value="0" class="number-input">
             </div>
             
             <div class="plus-symbol">+</div>
             
             <div class="input-group">
-                <label for="numeroB">Número B (0-99):</label>
-                <input type="number" id="numeroB" min="0" max="99" value="0" class="number-input">
+                <label for="numeroB">Número B (0-9999):</label>
+                <input type="number" id="numeroB" min="0" max="9999" value="0" class="number-input">
             </div>
             
             <button id="btnSumar" class="btn-calculate" onclick="sumar()">Calcular</button>
@@ -32,60 +32,32 @@
             </div>
         </div>
         
-        <div class="containers-section">
-            <h2>Detalle de Contenedores en Cascada</h2>
-            
-            <div class="container-details">
-                <div class="container-box">
-                    <h3>🔷 Contenedor 1: Unidades (Puerto 8001)</h3>
-                    <div class="detail-row">
-                        <span class="detail-label">NumberA:</span>
-                        <span id="uni-a" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">NumberB:</span>
-                        <span id="uni-b" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">CarryIn:</span>
-                        <span id="uni-cin" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row highlight">
-                        <span class="detail-label">Result:</span>
-                        <span id="uni-result" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row highlight">
-                        <span class="detail-label">CarryOut:</span>
-                        <span id="uni-cout" class="detail-value carry">-</span>
-                    </div>
-                </div>
-                
-                <div class="arrow">→</div>
-                
-                <div class="container-box">
-                    <h3>🔶 Contenedor 2: Decenas (Puerto 8002)</h3>
-                    <div class="detail-row">
-                        <span class="detail-label">NumberA:</span>
-                        <span id="dec-a" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">NumberB:</span>
-                        <span id="dec-b" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row">
-                        <span class="detail-label">CarryIn:</span>
-                        <span id="dec-cin" class="detail-value carry">-</span>
-                    </div>
-                    <div class="detail-row highlight">
-                        <span class="detail-label">Result:</span>
-                        <span id="dec-result" class="detail-value">-</span>
-                    </div>
-                    <div class="detail-row highlight">
-                        <span class="detail-label">CarryOut:</span>
-                        <span id="dec-cout" class="detail-value">-</span>
-                    </div>
-                </div>
+        <div class="info-section">
+            <div class="info-card">
+                <span class="info-label">Pods Usados:</span>
+                <span id="pods-usados" class="info-value">-</span>
             </div>
+            <div class="info-card">
+                <span class="info-label">Carry Final:</span>
+                <span id="carry-final" class="info-value">-</span>
+            </div>
+        </div>
+        
+        <div class="containers-section">
+            <h2>📦 Detalle de Pods en Cascada</h2>
+            <div id="containers-list" class="containers-list">
+                <p class="empty-message">Realiza una suma para ver los detalles de los pods...</p>
+            </div>
+        </div>
+        
+        <div class="legend-section">
+            <h3>ℹ️ Información</h3>
+            <ul>
+                <li><strong>Arquitectura:</strong> Kubernetes con 4 Deployments independientes</li>
+                <li><strong>Escalado:</strong> Cada pod maneja una posición de dígito</li>
+                <li><strong>Cascada:</strong> El CarryOut de un pod se conecta al CarryIn del siguiente</li>
+                <li><strong>NodePort:</strong> Pods expuestos en puertos 30000-30003</li>
+            </ul>
         </div>
     </div>
     
