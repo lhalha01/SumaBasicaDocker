@@ -1,0 +1,6 @@
+services:
+  suma-api:
+    image: ghcr.io/lhalha01/contenedores-backend:latest
+    ports:
+      - "8000:8000"
+    restart: unless-stopped

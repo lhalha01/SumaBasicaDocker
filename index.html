@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculadora Básica</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Calculadora Básica</h1>
+        
+        <div class="calculator-grid">
+            <!-- Primera fila: NumberA -->
+            <div class="grid-item empty"></div>
+            <div class="grid-item column-center">
+                <div class="input-label">NumberA</div>
+                <select id="numero1" class="input-large">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                </select>
+            </div>
+            <div class="grid-item empty"></div>
+            
+            <!-- Segunda fila: NumberB -->
+            <div class="grid-item empty"></div>
+            <div class="grid-item column-center">
+                <div class="input-label">NumberB</div>
+                <select id="numero2" class="input-large">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                </select>
+            </div>
+            <div class="grid-item empty"></div>
+            
+            <!-- Tercera fila: CarryOut + Botón + CarryIn -->
+            <div class="grid-item">
+                <div class="output-label">CarryOut</div>
+                <div id="decenas" class="output-display">0</div>
+            </div>
+            <div class="grid-item column-center">
+                <button id="btnSumar" class="btn-central" onclick="sumar()">+</button>
+            </div>
+            <div class="grid-item">
+                <div class="input-label">CarryIn</div>
+                <select id="numero0" class="input-small">
+                    <option value="0">0</option>
+                    <option value="1">1</option>
+                </select>
+            </div>
+            
+            <!-- Cuarta fila: Result -->
+            <div class="grid-item empty"></div>
+            <div class="grid-item column-center">
+                <div class="output-label">Result</div>
+                <div id="unidades" class="output-display">0</div>
+            </div>
+            <div class="grid-item empty"></div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
