@@ -250,6 +250,7 @@ h1 {
     border-radius: 20px;
     font-size: 0.75em;
     font-weight: 600;
+    white-space: nowrap;
 }
 
 .detail-row {
