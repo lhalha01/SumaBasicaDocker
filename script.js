@@ -18,6 +18,10 @@ async function sumar() {
         const scalingLog = document.getElementById('scaling-log');
         scalingLog.innerHTML = '<p class="loading-message">⏳ Escalando pods necesarios...</p>';
         
+        // Limpiar sección de pods antes de la nueva operación
+        const containersSection = document.getElementById('containers-list');
+        containersSection.innerHTML = '<p class="loading-message">⏳ Preparando pods...</p>';
+        
         // Llamar al servicio proxy que coordina los pods de Kubernetes
         const response = await fetch('http://localhost:8080/suma-n-digitos', {
             method: 'POST',
@@ -42,11 +46,11 @@ async function sumar() {
         document.getElementById('pods-usados').textContent = data.ContenedoresUsados;
         document.getElementById('carry-final').textContent = data.CarryOut;
         
-        // Renderizar los detalles de los pods
-        renderPodDetails(data.Details);
-        
-        // Renderizar eventos de escalado
+        // Renderizar eventos de escalado primero
         renderScalingEvents(data.EventosEscalado || []);
+        
+        // Renderizar los detalles de los pods progresivamente
+        renderPodDetailsProgressively(data.Details, data.EventosEscalado || []);
         
     } catch (error) {
         console.error('Error al realizar la suma:', error);
@@ -56,6 +60,110 @@ async function sumar() {
         document.getElementById('resultado').textContent = '?';
         document.getElementById('pods-usados').textContent = '?';
         document.getElementById('carry-final').textContent = '?';
+    }
+}
+
+function renderPodDetailsProgressively(details, eventos) {
+    const container = document.getElementById('containers-list');
+    
+    if (!details || details.length === 0) {
+        container.innerHTML = '<p class="empty-message">No hay detalles disponibles</p>';
+        return;
+    }
+    
+    // Limpiar contenedor
+    container.innerHTML = '';
+    
+    // Calcular delays basados en eventos de escalado
+    const delays = calculatePodDelays(eventos, details);
+    
+    // Invertir el orden para mostrar de mayor a menor (millares -> unidades)
+    const detailsReversed = [...details].reverse();
+    
+    // Renderizar cada pod con delay progresivo
+    detailsReversed.forEach((detail, index) => {
+        const delay = delays[detail.Posicion] || 0;
+        
+        setTimeout(() => {
+            renderSinglePod(detail, index, detailsReversed, container);
+        }, delay);
+    });
+}
+
+function calculatePodDelays(eventos, details) {
+    const delays = {};
+    
+    // Los pods deben aparecer de derecha a izquierda (Unidades -> Millares)
+    // Calcular el número de pods y asignar delays inversos
+    const numPods = details.length;
+    
+    // Ordenar details por posición para asegurar el orden correcto
+    const sortedDetails = [...details].sort((a, b) => a.Posicion - b.Posicion);
+    
+    // Asignar delays: pos 0 (Unidades/derecha) primero, pos 3 (Millares/izquierda) último
+    sortedDetails.forEach((detail, index) => {
+        delays[detail.Posicion] = index * 400; // 400ms entre cada pod
+    });
+    
+    return delays;
+}
+
+function renderSinglePod(detail, index, detailsReversed, container) {
+    const isLast = index === detailsReversed.length - 1;
+    
+    // Crear el box del contenedor
+    const box = document.createElement('div');
+    box.className = 'container-box pod-appear';
+    
+    const carryOutClass = detail.CarryOut === 1 ? 'carry-active' : '';
+    const carryInClass = detail.CarryIn === 1 ? 'carry-active' : '';
+    
+    box.innerHTML = `
+        <h3>📦 Pod: ${detail.Pod}</h3>
+        <div class="pod-info">
+            <span class="badge">Posición: ${detail.NombrePosicion}</span>
+            <span class="badge">Puerto: ${detail.Port}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">NumberA:</span>
+            <span class="detail-value">${detail.A}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">NumberB:</span>
+            <span class="detail-value">${detail.B}</span>
+        </div>
+        <div class="detail-row">
+            <span class="detail-label">CarryIn:</span>
+            <span class="detail-value ${carryInClass}">${detail.CarryIn}</span>
+        </div>
+        <div class="detail-row highlight">
+            <span class="detail-label">Result:</span>
+            <span class="detail-value">${detail.Result}</span>
+        </div>
+        <div class="detail-row highlight">
+            <span class="detail-label">CarryOut:</span>
+            <span class="detail-value ${carryOutClass}">${detail.CarryOut}</span>
+        </div>
+    `;
+    
+    // Insertar al principio para mantener el orden visual correcto (Millares a la izquierda)
+    // Como Unidades aparece primero (delay menor), se inserta primero y queda a la derecha
+    container.insertBefore(box, container.firstChild);
+    
+    // Agregar flecha si no es el último
+    if (!isLast) {
+        const arrow = document.createElement('div');
+        arrow.className = 'arrow pod-appear';
+        arrow.textContent = '←';
+        
+        // Resaltar la flecha si hay carry (el carry fluye de derecha a izquierda)
+        // Verificar el CarryOut del pod a la derecha (siguiente en el array invertido)
+        if (detailsReversed[index + 1] && detailsReversed[index + 1].CarryOut === 1) {
+            arrow.classList.add('arrow-active');
+        }
+        
+        // Insertar flecha también al principio, después del box
+        container.insertBefore(arrow, box.nextSibling);
     }
 }
 
