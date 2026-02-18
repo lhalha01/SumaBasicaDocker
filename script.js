@@ -110,10 +110,11 @@ function renderPodDetails(details) {
         if (!isLast) {
             const arrow = document.createElement('div');
             arrow.className = 'arrow';
-            arrow.textContent = '→';
+            arrow.textContent = '←';
             
-            // Resaltar la flecha si hay carry
-            if (detail.CarryOut === 1) {
+            // Resaltar la flecha si hay carry (el carry fluye de derecha a izquierda)
+            // Verificar el CarryOut del pod a la derecha (siguiente en el array invertido)
+            if (detailsReversed[index + 1] && detailsReversed[index + 1].CarryOut === 1) {
                 arrow.classList.add('arrow-active');
             }
             
