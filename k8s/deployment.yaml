@@ -9,7 +9,7 @@ metadata:
     app: suma-backend
     digito: "0"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: suma-backend
@@ -67,7 +67,7 @@ metadata:
     app: suma-backend
     digito: "1"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: suma-backend
@@ -125,7 +125,7 @@ metadata:
     app: suma-backend
     digito: "2"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: suma-backend
@@ -183,7 +183,7 @@ metadata:
     app: suma-backend
     digito: "3"
 spec:
-  replicas: 1
+  replicas: 0
   selector:
     matchLabels:
       app: suma-backend

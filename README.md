@@ -12,6 +12,37 @@ Esta rama implementa la suma de números de N dígitos (1-4) mediante la orquest
 
 El **CarryOut** de cada pod se conecta automáticamente al **CarryIn** del siguiente pod en la cascada.
 
+## Rama: DigitosDinamicos (ACTUAL)
+
+Esta rama extiende **NDigitos** implementando **escalado dinámico de pods** (scale-to-zero):
+
+### Características del Escalado Dinámico
+
+- **Estado inicial**: Todos los deployments tienen `replicas: 0` (sin pods corriendo)
+- **Escalado bajo demanda**: Los pods se escalan automáticamente según los dígitos necesarios
+- **Optimización de recursos**: Solo se activan los pods necesarios para cada operación:
+  - `5 + 3` → Solo escala Pod-0 (Unidades)
+  - `99 + 88` → Escala Pod-0 y Pod-1 (Unidades + Decenas)
+  - `9876 + 5432` → Escala los 4 pods (Unidades + Decenas + Centenas + Millares)
+- **Port-forwarding dinámico**: El proxy Flask establece automáticamente los port-forwards necesarios
+
+### Ventajas
+
+- **Ahorro de recursos**: 0 MB de RAM en reposo vs. 256 MB con 4 pods siempre activos
+- **Escalado horizontal**: Solo paga por lo que usa
+- **Latencia aceptable**: ~10-15 segundos para el primer request (tiempo de arranque del pod), <1 segundo para subsecuentes
+- **Ideal para cargas intermitentes**: Calculadora de uso ocasional
+
+### Flujo de Escalado
+
+1. Usuario solicita: `9876 + 5432`
+2. Proxy detecta que necesita 4 dígitos
+3. Escala dinámicamente: `kubectl scale deployment suma-digito-{0,1,2,3} --replicas=1`
+4. Espera a que los pods estén `Ready` (kubectl wait)
+5. Establece port-forwards para cada pod
+6. Ejecuta la suma en cascada
+7. Retorna el resultado
+
 ## Arquitectura del Sistema
 
 ```
@@ -35,8 +66,10 @@ El **CarryOut** de cada pod se conecta automáticamente al **CarryIn** del sigui
 ### Componentes
 
 - **Frontend**: HTML/CSS/JavaScript (Puerto 8080)
-- **Proxy Flask**: Orquesta las llamadas a los servicios K8s
+- **Proxy Flask**: Orquesta las llamadas a los servicios K8s y gestiona el escalado dinámico
 - **Pods Kubernetes**: 4 pods idénticos del backend (ghcr.io/lhalha01/contenedores-backend:latest)
+  - **Escalado dinámico**: Los pods inician en `replicas: 0` y se escalan bajo demanda
+  - **Port-forwarding automático**: El proxy establece los port-forwards cuando se necesitan
 - **Servicios NodePort**: Exponen cada pod en puertos 30000-30003
 
 ### Flujo de Datos (Ejemplo: 9876 + 5432)
@@ -135,9 +168,11 @@ kubectl apply -f k8s/deployment.yaml
 kubectl get pods -n calculadora-suma
 ```
 
-### 3. Port-Forward de Servicios (Minikube/Podman Desktop)
+### 3. Port-Forward de Servicios (Automático)
 
-En Minikube/Podman Desktop, los NodePort no son accesibles directamente. Necesitas port-forwarding:
+**Rama DigitosDinamicos**: El proxy Flask establece automáticamente los port-forwards necesarios cuando escala los pods. No es necesario ejecutar comandos de port-forward manualmente.
+
+**Nota**: Si deseas verificar manualmente los servicios o usar la rama NDigitos (sin escalado dinámico), puedes establecer port-forwards manualmente:
 
 ```powershell
 # Terminal 1
@@ -153,7 +188,9 @@ kubectl port-forward -n calculadora-suma service/suma-digito-2 30002:8000
 kubectl port-forward -n calculadora-suma service/suma-digito-3 30003:8000
 ```
 
-**Tip**: Puedes usar un script PowerShell para iniciar todos los port-forwards en background:
+En la rama **DigitosDinamicos**, el proxy gestiona esto automáticamente.
+
+**Tip para rama NDigitos**: Puedes usar un script PowerShell para iniciar todos los port-forwards en background:
 
 ```powershell
 Start-Job -ScriptBlock { kubectl port-forward -n calculadora-suma service/suma-digito-0 30000:8000 }
@@ -205,12 +242,22 @@ kubectl get services -n calculadora-suma
 
 ### Escalar Pods
 
+**Rama DigitosDinamicos**: El escalado se realiza automáticamente. Los deployments inician en `replicas: 0` y el proxy los escala bajo demanda.
+
+Para escalar manualmente (rama NDigitos o debugging):
+
 ```powershell
 # Aumentar réplicas de un deployment
 kubectl scale deployment suma-digito-0 --replicas=3 -n calculadora-suma
 
 # Verificar réplicas
 kubectl get deployments -n calculadora-suma
+
+# Escalar todos los deployments a 0 (rama DigitosDinamicos por defecto)
+kubectl scale deployment suma-digito-0 suma-digito-1 suma-digito-2 suma-digito-3 --replicas=0 -n calculadora-suma
+
+# Escalar todos los deployments a 1 (rama NDigitos comportamiento original)
+kubectl scale deployment suma-digito-0 suma-digito-1 suma-digito-2 suma-digito-3 --replicas=1 -n calculadora-suma
 ```
 
 ### Limpiar Recursos

@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify, make_response, send_from_directory
 from flask_cors import CORS
 import requests
 import os
+import subprocess
+import time
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
@@ -19,6 +21,149 @@ K8S_SERVICES = {
 }
 
 MAX_DIGITOS = 4  # Soporta hasta 9999
+
+# Funciones de escalado dinámico
+# Diccionario para almacenar los procesos de port-forward activos
+port_forward_processes = {}
+
+def establecer_port_forward(digito):
+    """
+    Establece un port-forward para el servicio de un dígito específico.
+    
+    Args:
+        digito: Número de dígito (0-3) correspondiente al servicio
+    
+    Returns:
+        True si el port-forward fue exitoso, False en caso contrario
+    """
+    global port_forward_processes
+    
+    try:
+        # Si ya existe un port-forward activo, no hacer nada
+        if digito in port_forward_processes:
+            proceso = port_forward_processes[digito]
+            if proceso.poll() is None:  # El proceso aún está corriendo
+                print(f"✓ Port-forward para digito-{digito} ya está activo")
+                return True
+        
+        service_name = f"suma-digito-{digito}"
+        namespace = "calculadora-suma"
+        local_port = 30000 + digito
+        
+        cmd = [
+            "kubectl", "port-forward",
+            f"svc/{service_name}",
+            f"{local_port}:8000",
+            "-n", namespace
+        ]
+        
+        # Iniciar el proceso de port-forward en background
+        proceso = subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if os.name == 'nt' else 0
+        )
+        
+        port_forward_processes[digito] = proceso
+        
+        # Esperar un momento para que el port-forward se establezca
+        time.sleep(2)
+        
+        print(f"✓ Port-forward establecido para {service_name} en puerto {local_port}")
+        return True
+        
+    except Exception as e:
+        print(f"✗ Excepción estableciendo port-forward para digito-{digito}: {e}")
+        return False
+
+def escalar_pod(digito, replicas):
+    """
+    Escala el deployment de un dígito específico al número de réplicas indicado.
+    
+    Args:
+        digito: Número de dígito (0-3) correspondiente al deployment
+        replicas: Número de réplicas deseadas (0 para apagar, 1 para encender)
+    
+    Returns:
+        True si el escalado fue exitoso, False en caso contrario
+    """
+    try:
+        deployment_name = f"suma-digito-{digito}"
+        namespace = "calculadora-suma"
+        
+        cmd = [
+            "kubectl", "scale", "deployment", deployment_name,
+            f"--replicas={replicas}",
+            "-n", namespace
+        ]
+        
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            print(f"✓ Deployment {deployment_name} escalado a {replicas} réplica(s)")
+            return True
+        else:
+            print(f"✗ Error escalando {deployment_name}: {result.stderr}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print(f"✗ Timeout escalando deployment suma-digito-{digito}")
+        return False
+    except Exception as e:
+        print(f"✗ Excepción escalando suma-digito-{digito}: {e}")
+        return False
+
+def esperar_pod_ready(digito, timeout=60):
+    """
+    Espera a que el pod de un dígito específico esté en estado Ready.
+    
+    Args:
+        digito: Número de dígito (0-3) correspondiente al pod
+        timeout: Tiempo máximo de espera en segundos (default: 60)
+    
+    Returns:
+        True si el pod está listo, False si se agotó el tiempo
+    """
+    try:
+        deployment_name = f"suma-digito-{digito}"
+        namespace = "calculadora-suma"
+        
+        # Usar kubectl wait para esperar a que el pod esté ready
+        cmd = [
+            "kubectl", "wait", f"--for=condition=ready",
+            "pod",
+            "-l", f"app=suma-backend,digito={digito}",
+            "-n", namespace,
+            f"--timeout={timeout}s"
+        ]
+        
+        print(f"⏳ Esperando a que el pod suma-digito-{digito} esté listo...")
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=timeout + 5
+        )
+        
+        if result.returncode == 0:
+            print(f"✓ Pod suma-digito-{digito} está listo")
+            return True
+        else:
+            print(f"✗ Pod suma-digito-{digito} no está listo: {result.stderr}")
+            return False
+            
+    except subprocess.TimeoutExpired:
+        print(f"✗ Timeout esperando pod suma-digito-{digito}")
+        return False
+    except Exception as e:
+        print(f"✗ Excepción esperando pod suma-digito-{digito}: {e}")
+        return False
 
 @app.route('/')
 def index():
@@ -83,6 +228,28 @@ def suma_n_digitos():
         # Validar que no excedamos el límite de contenedores
         if num_digitos > MAX_DIGITOS:
             raise ValueError(f"Solo soportamos hasta {MAX_DIGITOS} dígitos (0-{max_numero})")
+        
+        # Escalar dinámicamente los pods necesarios (escalado horizontal)
+        print(f"\n{'='*60}")
+        print(f"Escalando pods para operación: {numberA} + {numberB}")
+        print(f"Se necesitan {num_digitos} pod(s)")
+        print(f"{'='*60}")
+        
+        # Escalar cada pod necesario
+        for i in range(num_digitos):
+            # Escalar a 1 réplica
+            if not escalar_pod(i, 1):
+                raise Exception(f"No se pudo escalar el pod suma-digito-{i}")
+            
+            # Esperar a que el pod esté listo
+            if not esperar_pod_ready(i, timeout=60):
+                raise Exception(f"El pod suma-digito-{i} no está listo después de 60 segundos")
+            
+            # Establecer port-forward para este pod
+            if not establecer_port_forward(i):
+                raise Exception(f"No se pudo establecer port-forward para suma-digito-{i}")
+        
+        print(f"✓ Todos los pods necesarios están listos y accesibles\n")
         
         # Realizar la cascada de sumas
         resultados = []
@@ -176,8 +343,10 @@ def get_nombre_posicion(pos):
 if __name__ == '__main__':
     print("=" * 60)
     print("Proxy de Calculadora con N Dígitos - Kubernetes")
+    print("MODO: Escalado Dinámico (Scale-to-Zero)")
     print("=" * 60)
     print(f"Soporta números de 0 a {10**MAX_DIGITOS - 1} ({MAX_DIGITOS} dígitos)")
+    print(f"Los pods se escalan automáticamente según la demanda")
     print(f"Servicios Kubernetes configurados:")
     for pos, url in K8S_SERVICES.items():
         print(f"  - Dígito {pos} ({get_nombre_posicion(pos)}): {url}")
