@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    max-width: 1400px;
+    max-width: 1800px;
     margin: 0 auto;
     background: white;
     border-radius: 20px;
@@ -180,10 +180,11 @@ h1 {
     align-items: center;
     justify-content: center;
     gap: 15px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     padding: 20px;
     background: #f8f9fa;
     border-radius: 12px;
+    overflow-x: auto;
 }
 
 .empty-message {
@@ -194,9 +195,8 @@ h1 {
 }
 
 .container-box {
-    flex: 0 1 auto;
-    min-width: 250px;
-    max-width: 300px;
+    flex: 0 0 auto;
+    width: 280px;
     background: white;
     border-radius: 12px;
     padding: 20px;
