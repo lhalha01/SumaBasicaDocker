@@ -251,27 +251,18 @@ function renderScalingEvents(eventos) {
     
     eventos.forEach((evento, index) => {
         const eventItem = document.createElement('div');
-        eventItem.className = `scaling-event scaling-event-${evento.Tipo}`;
+        eventItem.className = `scaling-trace scaling-trace-${evento.Tipo}`;
         
         // Agregar animación de entrada con delay
-        eventItem.style.animationDelay = `${index * 0.1}s`;
+        eventItem.style.animationDelay = `${index * 0.05}s`;
         
         let icon = '⚙️';
         if (evento.Tipo === 'listo') icon = '✅';
         else if (evento.Tipo === 'espera') icon = '⏳';
         else if (evento.Tipo === 'escalado') icon = '🚀';
         
-        eventItem.innerHTML = `
-            <span class="scaling-icon">${icon}</span>
-            <div class="scaling-content">
-                <div class="scaling-header">
-                    <strong>${evento.Pod}</strong>
-                    <span class="scaling-position">(${evento.Posicion})</span>
-                </div>
-                <div class="scaling-status">${evento.Estado}</div>
-                <div class="scaling-time">${evento.Timestamp}</div>
-            </div>
-        `;
+        // Formato simplificado tipo traza
+        eventItem.textContent = `[${evento.Timestamp}] ${icon} ${evento.Posicion} - ${evento.Estado}`;
         
         container.appendChild(eventItem);
     });

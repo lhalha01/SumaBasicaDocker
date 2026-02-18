@@ -247,7 +247,7 @@ def suma_n_digitos():
                 'Tipo': 'escalado',
                 'Pod': f'suma-digito-{i}',
                 'Posicion': get_nombre_posicion(i),
-                'Estado': 'Escalando a 1 réplica',
+                'Estado': f'Pod {i+1} de {num_digitos}',
                 'Timestamp': time.strftime('%H:%M:%S')
             })
             
