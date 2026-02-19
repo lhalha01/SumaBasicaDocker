@@ -55,6 +55,29 @@ roleRef:
   name: {{ include "suma-basica.fullname" . }}-proxy
 {{- end }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "suma-basica.fullname" . }}-proxy-app
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+    app.kubernetes.io/component: proxy
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+data:
+  proxy.py: |
+{{ .Files.Get "files/proxy/proxy.py" | indent 4 }}
+  k8s_orchestrator.py: |
+{{ .Files.Get "files/proxy/k8s_orchestrator.py" | indent 4 }}
+  index.html: |
+{{ .Files.Get "files/proxy/index.html" | indent 4 }}
+  script.js: |
+{{ .Files.Get "files/proxy/script.js" | indent 4 }}
+  styles.css: |
+{{ .Files.Get "files/proxy/styles.css" | indent 4 }}
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -91,6 +114,9 @@ spec:
         - name: proxy
           image: "{{ .Values.proxy.image.repository }}:{{ .Values.proxy.image.tag }}"
           imagePullPolicy: {{ .Values.proxy.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - apt-get update && apt-get install -y --no-install-recommends curl ca-certificates && rm -rf /var/lib/apt/lists/* && KVER=$(curl -L -s https://dl.k8s.io/release/stable.txt) && curl -L -o /usr/local/bin/kubectl https://dl.k8s.io/release/${KVER}/bin/linux/amd64/kubectl && chmod +x /usr/local/bin/kubectl && pip install --no-cache-dir flask flask-cors requests && python /app/proxy.py
           ports:
             - containerPort: {{ .Values.proxy.service.targetPort }}
               name: http
@@ -103,8 +129,15 @@ spec:
               value: {{ .Values.proxy.env.orchestratorInCluster | quote }}
             - name: BACKEND_SERVICE_PORT
               value: {{ .Values.proxy.env.backendServicePort | quote }}
+          volumeMounts:
+            - name: proxy-app
+              mountPath: /app
           resources:
 {{ toYaml .Values.proxy.resources | indent 12 }}
+      volumes:
+        - name: proxy-app
+          configMap:
+            name: {{ include "suma-basica.fullname" . }}-proxy-app
 ---
 apiVersion: v1
 kind: Service
