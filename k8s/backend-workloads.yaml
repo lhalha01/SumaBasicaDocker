@@ -26,6 +26,19 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 10
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 30
 ---
 apiVersion: v1
 kind: Service
@@ -71,6 +84,19 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 10
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 30
 ---
 apiVersion: v1
 kind: Service
@@ -116,6 +142,19 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 10
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 30
 ---
 apiVersion: v1
 kind: Service
@@ -161,6 +200,19 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 2
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 10
+          startupProbe:
+            tcpSocket:
+              port: 8000
+            periodSeconds: 2
+            timeoutSeconds: 1
+            failureThreshold: 30
 ---
 apiVersion: v1
 kind: Service
