@@ -2,6 +2,8 @@
 
 Aplicación web que suma números de hasta 4 dígitos (0-9999) usando **Kubernetes** para orquestar múltiples pods en cascada, simulando un sumador de circuitos digitales (Ripple-Carry Adder).
 
+[TOC]
+
 ## Rama: NDigitos
 
 Esta rama implementa la suma de números de N dígitos (1-4) mediante la orquestación dinámica de pods en Kubernetes:
@@ -45,72 +47,29 @@ Esta rama extiende **NDigitos** implementando **escalado dinámico de pods** (sc
 
 ## Arquitectura del Sistema
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                       CAPA DE PRESENTACIÓN                                  │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  Frontend Web (HTML/CSS/JavaScript)                                   │  │
-│  │  http://localhost:8080                                                │  │
-│  │  • Entrada de números (0-9999)                                        │  │
-│  │  • Visualización de resultados y carry                                │  │
-│  └────────────────────────────────┬──────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │ HTTP POST
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                      CAPA DE ORQUESTACIÓN                                   │
-│  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │  Proxy Flask (Python)                                                 │  │
-│  │  • Descomposición de números en dígitos                              │  │
-│  │  • Escalado dinámico de pods (scale-to-zero)                         │  │
-│  │  • Gestión de port-forwards (kubectl port-forward)                   │  │
-│  │  • Propagación de CarryOut → CarryIn en cascada                      │  │
-│  └────────────────────────────────┬──────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │ kubectl scale + port-forward
-                                     ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                    KUBERNETES CLUSTER (Minikube)                            │
-│                    Namespace: calculadora-suma                              │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │                     Escalado Dinámico (replicas: 0→1)               │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
-│  │   Pod-0      │  │   Pod-1      │  │   Pod-2      │  │   Pod-3      │   │
-│  │  (Unidades)  │  │  (Decenas)   │  │  (Centenas)  │  │  (Millares)  │   │
-│  │              │  │              │  │              │  │              │   │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │   │
-│  │ │ Backend  │ │  │ │ Backend  │ │  │ │ Backend  │ │  │ │ Backend  │ │   │
-│  │ │ Container│ │  │ │ Container│ │  │ │ Container│ │  │ │ Container│ │   │
-│  │ │ :8000    │ │  │ │ :8000    │ │  │ │ :8000    │ │  │ │ :8000    │ │   │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │   │
-│  │      ↕       │  │      ↕       │  │      ↕       │  │      ↕       │   │
-│  │ Service:     │  │ Service:     │  │ Service:     │  │ Service:     │   │
-│  │ NodePort     │  │ NodePort     │  │ NodePort     │  │ NodePort     │   │
-│  │ :30000       │  │ :30001       │  │ :30002       │  │ :30003       │   │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘   │
-│         │                 │                 │                 │            │
-└─────────┼─────────────────┼─────────────────┼─────────────────┼────────────┘
-          │                 │                 │                 │
-          └─────────────────┴─────────────────┴─────────────────┘
-                     Port-forward a localhost
+```mermaid
+flowchart TD
+  FE[Frontend Web\nHTML/CSS/JavaScript\nlocalhost:8080]
+  PX[Proxy Flask\nOrquestación + Scale-to-Zero\nPort-forward dinámico]
 
-         ┌──────────────────────────────────────────────────────────┐
-         │           FLUJO DE CARRY EN CASCADA                      │
-         │                                                          │
-         │  Pod-0 (U)     Pod-1 (D)     Pod-2 (C)     Pod-3 (M)    │
-         │  ────────      ────────      ────────      ────────      │
-         │   6 + 2    →    7 + 3    →    8 + 4    →    9 + 5       │
-         │  + Cin:0       + Cin:0       + Cin:1       + Cin:1       │
-         │  ────────      ────────      ────────      ────────      │
-         │  = 8           = 10          = 13          = 15          │
-         │  Cout: 0  ───→ Cout: 1  ───→ Cout: 1  ───→ Cout: 1      │
-         │    │              │              │              │        │
-         │    └──────────────┴──────────────┴──────────────┘        │
-         │                  Resultado: 15308                        │
-         └──────────────────────────────────────────────────────────┘
+  FE -->|HTTP POST /suma-n-digitos| PX
+
+  subgraph K8S[Kubernetes Cluster - Namespace calculadora-suma]
+    direction LR
+    P0[Pod-0 Unidades\nService NodePort 30000\nContainer :8000]
+    P1[Pod-1 Decenas\nService NodePort 30001\nContainer :8000]
+    P2[Pod-2 Centenas\nService NodePort 30002\nContainer :8000]
+    P3[Pod-3 Millares\nService NodePort 30003\nContainer :8000]
+  end
+
+  PX -->|scale + wait + port-forward| P0
+  PX -->|scale + wait + port-forward| P1
+  PX -->|scale + wait + port-forward| P2
+  PX -->|scale + wait + port-forward| P3
+
+  P0 -->|CarryOut → CarryIn| P1
+  P1 -->|CarryOut → CarryIn| P2
+  P2 -->|CarryOut → CarryIn| P3
 ```
 
 ### Componentes
@@ -182,6 +141,33 @@ kubectl get nodes
 ```
 
 Deberías ver un nodo en estado **Ready**.
+
+### Paso 3.1: Arrancar Podman y Minikube (si el cluster está apagado)
+
+Si ves errores como `Unable to connect to the server` o `PROVIDER_PODMAN_NOT_RUNNING`, inicia primero Podman y luego Minikube:
+
+```powershell
+# 1) Verificar máquinas de Podman
+podman machine list
+
+# 2) Iniciar la máquina por defecto (si está detenida)
+podman machine start podman-machine-default
+
+# 3) Iniciar Minikube usando driver Podman
+minikube start --driver=podman
+
+# 4) Verificar contexto y estado
+kubectl config current-context
+kubectl get nodes
+kubectl get deployments -n calculadora-suma
+```
+
+Para parar el entorno al terminar:
+
+```powershell
+minikube stop
+podman machine stop podman-machine-default
+```
 
 ### Paso 4: Instalar Dependencias Python
 
