@@ -7,6 +7,7 @@ Aplicación web que suma números de hasta 4 dígitos (0-9999) usando **Kubernet
 ## Rama: NDigitos
 
 Esta rama implementa la suma de números de N dígitos (1-4) mediante la orquestación dinámica de pods en Kubernetes:
+
 - **Pod 0 (Unidades)**: NodePort 30000
 - **Pod 1 (Decenas)**: NodePort 30001
 - **Pod 2 (Centenas)**: NodePort 30002
@@ -85,7 +86,8 @@ flowchart TD
 
 1. Usuario ingresa: `A=9876`, `B=5432`
 2. Proxy descompone en dígitos (derecha a izquierda):
-   ```
+
+  ```text
    Posición  | A | B |
    ---------|---|---|
    0 (Unid) | 6 | 2 |
@@ -93,28 +95,30 @@ flowchart TD
    2 (Cent) | 8 | 4 |
    3 (Mill) | 9 | 5 |
    ```
-3. **Pod-0 (Unidades)**:
+
+1. **Pod-0 (Unidades)**:
    - Input: `6 + 2 + 0(CarryIn)` = 8
    - Output: `Result=8, CarryOut=0` ✓
    
-4. **Pod-1 (Decenas)**:
+1. **Pod-1 (Decenas)**:
    - Input: `7 + 3 + 0(CarryIn previo)` = 10
    - Output: `Result=0, CarryOut=1` ✓
    
-5. **Pod-2 (Centenas)**:
+1. **Pod-2 (Centenas)**:
    - Input: `8 + 4 + 1(CarryIn previo)` = 13
    - Output: `Result=3, CarryOut=1` ✓
    
-6. **Pod-3 (Millares)**:
+1. **Pod-3 (Millares)**:
    - Input: `9 + 5 + 1(CarryIn previo)` = 15
    - Output: `Result=5, CarryOut=1` ✓
 
-7. **Resultado final**: `[CarryOut][M][C][D][U]` = `15308` ✓
+1. **Resultado final**: `[CarryOut][M][C][D][U]` = `15308` ✓
 
 ## Requisitos
 
 - **Kubernetes**: Minikube, Podman Desktop, o cualquier cluster local
 - **kubectl**: Para gestionar recursos de K8s
+- **Helm 3**: Para desplegar el chart `helm/suma-basica`
 - **Python 3.x**: Con Flask, Flask-CORS y Requests
 - **Podman Desktop** (recomendado para Windows): Incluye Kubernetes integrado
 
@@ -175,7 +179,26 @@ podman machine stop podman-machine-default
 pip install flask flask-cors requests
 ```
 
+### Paso 5: Instalar Helm (Windows)
+
+```powershell
+winget install Helm.Helm
+```
+
+Verifica que Helm quedó disponible:
+
+```powershell
+helm version
+```
+
 ## Despliegue en Kubernetes
+
+### Validación rápida del chart Helm
+
+```powershell
+helm lint ./helm/suma-basica
+helm template suma-basica ./helm/suma-basica | Select-Object -First 40 | Out-String
+```
 
 ### 1. Crear Secret para GitHub Container Registry
 
@@ -191,7 +214,35 @@ kubectl create secret docker-registry ghcr-secret \
 
 **Nota**: Reemplaza `<TU_GITHUB_PAT>` con tu Personal Access Token de GitHub con permisos `read:packages`.
 
-### 2. Aplicar Manifiestos de Kubernetes
+### 2. Desplegar con Helm (recomendado)
+
+```powershell
+# Instalar/actualizar release
+helm upgrade --install suma-basica ./helm/suma-basica \
+  --namespace calculadora-suma \
+  --create-namespace
+
+# Verificar recursos
+kubectl get all -n calculadora-suma
+```
+
+Para personalizar puertos, imagen o réplicas iniciales, ajusta `helm/suma-basica/values.yaml`.
+
+#### Comando único (local Minikube/Podman)
+
+Define primero tu PAT de GitHub en la sesión:
+
+```powershell
+$env:GITHUB_PAT="<TU_GITHUB_PAT>"
+```
+
+Después ejecuta este comando único (idempotente):
+
+```powershell
+kubectl create namespace calculadora-suma --dry-run=client -o yaml | kubectl apply -f -; kubectl create secret docker-registry ghcr-secret --docker-server=ghcr.io --docker-username=lhalha01 --docker-password=$env:GITHUB_PAT -n calculadora-suma --dry-run=client -o yaml | kubectl apply -f -; helm upgrade --install suma-basica ./helm/suma-basica --namespace calculadora-suma --create-namespace -f ./helm/suma-basica/values-local.yaml
+```
+
+### 3. Aplicar Manifiestos de Kubernetes (alternativa)
 
 ```powershell
 # Crear namespace
@@ -204,7 +255,7 @@ kubectl apply -f k8s/deployment.yaml
 kubectl get pods -n calculadora-suma
 ```
 
-### 3. Port-Forward de Servicios (Automático)
+### 4. Port-Forward de Servicios (Automático)
 
 **Rama DigitosDinamicos**: El proxy Flask establece automáticamente los port-forwards necesarios cuando escala los pods. No es necesario ejecutar comandos de port-forward manualmente.
 
@@ -235,28 +286,38 @@ Start-Job -ScriptBlock { kubectl port-forward -n calculadora-suma service/suma-d
 Start-Job -ScriptBlock { kubectl port-forward -n calculadora-suma service/suma-digito-3 30003:8000 }
 ```
 
-### 4. Iniciar el Proxy Flask
+### 5. Iniciar el Proxy Flask
 
 ```powershell
 python proxy.py
 ```
 
-### 5. Abrir la Aplicación
+### 6. Abrir la Aplicación
 
-Navega a: **http://localhost:8080**
+Navega a: **<http://localhost:8080>**
 
 ## Estructura de Archivos
 
-```
+```text
 SumaBasicaDocker/
+├── helm/
+│   └── suma-basica/        # Chart Helm del backend distribuido por dígitos
+│       └── values-local.yaml # Overrides para despliegue local con Helm
 ├── k8s/
 │   ├── namespace.yaml      # Definición del namespace
 │   └── deployment.yaml     # 4 Deployments + Services (NodePort)
+├── scripts/
+│   ├── helm-local.ps1      # Validación + despliegue Helm local
+│   ├── helm-status.ps1     # Diagnóstico de release/pods/eventos
+│   ├── helm-clean.ps1      # Limpieza de release/namespace/secret
+│   └── helm-all.ps1        # Flujo completo (deploy + diagnóstico)
 ├── index.html              # Frontend con visualización dinámica de pods
 ├── script.js               # Lógica JavaScript (llama a /suma-n-digitos)
 ├── styles.css              # Estilos CSS con tema Kubernetes
-├── proxy.py                # Servidor Flask que orquesta los pods
+├── proxy.py                # API Flask y coordinación de operación
+├── k8s_orchestrator.py     # Orquestación Kubernetes desacoplada
 └── README.md               # Este archivo
+```
 
 ## Comandos Útiles de Kubernetes
 
@@ -302,6 +363,9 @@ kubectl scale deployment suma-digito-0 suma-digito-1 suma-digito-2 suma-digito-3
 # Eliminar todo el namespace (y sus recursos)
 kubectl delete namespace calculadora-suma
 
+# O eliminar release de Helm
+helm uninstall suma-basica -n calculadora-suma
+
 # O eliminar recursos individuales
 kubectl delete -f k8s/deployment.yaml
 kubectl delete -f k8s/namespace.yaml
@@ -317,6 +381,83 @@ kubectl rollout restart deployment suma-digito-0 -n calculadora-suma
 kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ```
 
+## Helm Cheatsheet
+
+Script recomendado para local (valida + despliega en un paso):
+
+```powershell
+$env:GITHUB_PAT="<TU_GITHUB_PAT>"
+./scripts/helm-local.ps1
+```
+
+Solo validación del chart (sin desplegar):
+
+```powershell
+./scripts/helm-local.ps1 -ValidateOnly
+```
+
+Limpieza rápida de recursos Helm:
+
+```powershell
+# Solo desinstalar release (conserva namespace y secret)
+./scripts/helm-clean.ps1
+
+# Desinstalar release y eliminar namespace + secret
+./scripts/helm-clean.ps1 -DeleteNamespace -DeleteGhcrSecret
+```
+
+Diagnóstico rápido de release/pods/eventos:
+
+```powershell
+./scripts/helm-status.ps1
+./scripts/helm-status.ps1 -EventsTail 50
+```
+
+Flujo completo (deploy + diagnóstico):
+
+```powershell
+$env:GITHUB_PAT="<TU_GITHUB_PAT>"
+./scripts/helm-all.ps1
+
+# Solo validar chart + estado (sin desplegar)
+./scripts/helm-all.ps1 -ValidateOnly
+```
+
+```powershell
+# Instalar/actualizar release
+helm upgrade --install suma-basica ./helm/suma-basica --namespace calculadora-suma --create-namespace -f ./helm/suma-basica/values-local.yaml
+
+# Ver valores efectivos y estado
+helm get values suma-basica -n calculadora-suma
+helm status suma-basica -n calculadora-suma
+
+# Ver historial y rollback
+helm history suma-basica -n calculadora-suma
+helm rollback suma-basica 1 -n calculadora-suma
+
+# Desinstalar release
+helm uninstall suma-basica -n calculadora-suma
+```
+
+### Diagnóstico rápido Helm
+
+```powershell
+# 1) Verificar binario Helm en PATH
+helm version
+
+# 2) Revisar render del chart sin desplegar
+helm lint ./helm/suma-basica
+helm template suma-basica ./helm/suma-basica | Select-Object -First 60 | Out-String
+
+# 3) Revisar estado de la release y eventos del namespace
+helm status suma-basica -n calculadora-suma
+kubectl get events -n calculadora-suma --sort-by=.metadata.creationTimestamp | Select-Object -Last 30
+
+# 4) Si hay ImagePullBackOff, validar secret e imagen
+kubectl get secret ghcr-secret -n calculadora-suma
+kubectl describe pod -n calculadora-suma -l app=suma-backend
+```
+
 ## API del Proxy
 
 ### Endpoint Principal
@@ -324,6 +465,7 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 **POST** `/suma-n-digitos`
 
 **Request:**
+
 ```json
 {
   "NumberA": 9876,
@@ -332,6 +474,7 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ```
 
 **Response:**
+
 ```json
 {
   "Result": 15308,
@@ -378,7 +521,8 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ## Ejemplos de Prueba
 
 ### Ejemplo 1: Números de 1 dígito (usa solo Pod-0)
-```
+
+```text
 5 + 3 = 8
 - Pod-0 (Unidades): 5+3+0=8 → Result=8, CarryOut=0
 - Resultado: 8
@@ -386,7 +530,8 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ```
 
 ### Ejemplo 2: Números de 2 dígitos con carry
-```
+
+```text
 99 + 88 = 187
 - Pod-0 (Unidades): 9+8+0=17 → Result=7, CarryOut=1
 - Pod-1 (Decenas): 9+8+1=18 → Result=8, CarryOut=1
@@ -395,7 +540,8 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ```
 
 ### Ejemplo 3: Números de 4 dígitos
-```
+
+```text
 9876 + 5432 = 15308
 - Pod-0: 6+2+0=8 → Result=8, CarryOut=0
 - Pod-1: 7+3+0=10 → Result=0, CarryOut=1
@@ -406,7 +552,8 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 ```
 
 ### Ejemplo 4: Máximo valor soportado
-```
+
+```text
 9999 + 9999 = 19998
 - Pod-0: 9+9+0=18 → Result=8, CarryOut=1
 - Pod-1: 9+9+1=19 → Result=9, CarryOut=1
@@ -418,13 +565,15 @@ kubectl rollout status deployment suma-digito-0 -n calculadora-suma
 
 ## Pruebas con API
 
-### Probar un pod individual (con port-forward activo):
+### Probar un pod individual (con port-forward activo)
+
 ```powershell
 $body = @{NumberA=5; NumberB=3; CarryIn=0} | ConvertTo-Json
 Invoke-WebRequest -Uri "http://localhost:30000/suma" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
 ```
 
-### Probar la cascada completa:
+### Probar la cascada completa
+
 ```powershell
 $body = @{NumberA=9876; NumberB=5432} | ConvertTo-Json
 Invoke-WebRequest -Uri "http://localhost:8080/suma-n-digitos" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing
@@ -446,16 +595,19 @@ Invoke-WebRequest -Uri "http://localhost:8080/suma-n-digitos" -Method POST -Body
 Este proyecto tiene 3 ramas con diferentes niveles de complejidad:
 
 ### `master` - Un Dígito (0-9)
+
 - 1 contenedor Podman
 - Puerto: 8000
 - Ideal para aprender lo básico
 
 ### `DosDigitos` - Dos Dígitos (0-99)
+
 - 2 contenedores Podman en cascada
 - Puertos: 8001, 8002
 - Introduce el concepto de carry entre contenedores
 
 ### `NDigitos` (actual) - N Dígitos (0-9999)
+
 - 4 pods Kubernetes con NodePort
 - Puertos: 30000-30003
 - Orquestación dinámica según dígitos necesarios
@@ -463,13 +615,13 @@ Este proyecto tiene 3 ramas con diferentes niveles de complejidad:
 
 ## URLs del Sistema
 
-- **Frontend**: http://localhost:8080
-- **API Proxy**: http://localhost:8080/suma-n-digitos
-- **Pod-0 (Unidades)**: http://localhost:30000/suma
-- **Pod-1 (Decenas)**: http://localhost:30001/suma
-- **Pod-2 (Centenas)**: http://localhost:30002/suma
-- **Pod-3 (Millares)**: http://localhost:30003/suma
-- **Docs API Backend**: http://localhost:30000/docs
+- **Frontend**: <http://localhost:8080>
+- **API Proxy**: <http://localhost:8080/suma-n-digitos>
+- **Pod-0 (Unidades)**: <http://localhost:30000/suma>
+- **Pod-1 (Decenas)**: <http://localhost:30001/suma>
+- **Pod-2 (Centenas)**: <http://localhost:30002/suma>
+- **Pod-3 (Millares)**: <http://localhost:30003/suma>
+- **Docs API Backend**: <http://localhost:30000/docs>
 
 ## Solución de Problemas
 
@@ -511,4 +663,4 @@ Invoke-WebRequest -Uri "http://localhost:30000/suma" -Method POST ...
 **Tecnologías**: Kubernetes, Podman Desktop, Flask, Python  
 **Versión:** 3.0  
 **Fecha:** Febrero 2026  
-**Repositorio**: https://github.com/lhalha01/SumaBasicaDocker
+**Repositorio**: <https://github.com/lhalha01/SumaBasicaDocker>

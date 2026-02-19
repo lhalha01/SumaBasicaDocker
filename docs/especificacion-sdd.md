@@ -23,7 +23,9 @@ Aplicación web educativa que implementa la suma de dos números enteros no nega
 - Proxy backend en Python/Flask que orquesta Kubernetes.
 - 4 servicios backend homogéneos para cálculo por dígito.
 - Manifiestos Kubernetes para namespace, deployments y services.
+- Chart Helm para empaquetar y desplegar workloads por dígito.
 - Mecanismo de logs en tiempo real por SSE.
+- Scripts operativos PowerShell para despliegue, diagnóstico y limpieza Helm en local.
 - Pipeline CI/CD con prácticas IaC, CI, CD, CaC y DaC.
 
 ### 4.2 Fuera de alcance
@@ -122,9 +124,11 @@ Separación clara de responsabilidades: frontend, proxy, manifiestos, docs, pipe
 ### 8.1 Componentes
 
 - Frontend (HTML/CSS/JS): interacción y visualización.
-- Proxy Flask: API de suma, orquestación K8s, SSE.
+- Proxy Flask: API de suma, coordinación de operación y SSE.
+- Módulo `k8s_orchestrator.py`: orquestación `kubectl` (scale, wait, port-forward, scale-down).
 - Servicios backend por dígito (4): cálculo atómico por posición.
 - Kubernetes: deployments y services NodePort.
+- Helm: chart `helm/suma-basica` para instalación/upgrade parametrizable.
 
 ### 8.2 Flujo de alto nivel
 
@@ -225,7 +229,7 @@ Debe incluir:
 - Render progresivo de pods para visualizar secuencia.
 - Render de flechas y resaltado de carry.
 
-## 12. Especificación de backend proxy
+## 12. Especificación de backend proxy y orquestador
 
 ### 12.1 Tecnologías
 
@@ -234,18 +238,23 @@ Debe incluir:
 - requests
 - subprocess para comandos kubectl
 
-### 12.2 Comandos orquestados
+### 12.2 Separación de responsabilidades
+
+- `proxy.py`: validación de entrada, secuencia de cálculo, exposición de endpoints y SSE.
+- `k8s_orchestrator.py`: ejecución de comandos `kubectl`, manejo de port-forwards y scale-down.
+
+### 12.3 Comandos orquestados
 
 - kubectl scale
 - kubectl wait
 - kubectl port-forward
 
-### 12.3 Gestión de puertos
+### 12.4 Gestión de puertos
 
 - Definir puertos preferidos por dígito.
 - Si hay colisión, seleccionar puerto libre dinámico.
 
-### 12.4 Concurrencia
+### 12.5 Concurrencia
 
 - Proteger buffer de logs con lock.
 - Evitar desincronización del stream en reinicios o limpieza de buffer.
@@ -271,6 +280,17 @@ Debe incluir:
 ### 13.4 Secret de registro
 
 - Secret docker-registry para acceso a imagen privada (GHCR)
+
+### 13.5 Helm
+
+- Chart: `helm/suma-basica`
+- Values base: `helm/suma-basica/values.yaml`
+- Values local: `helm/suma-basica/values-local.yaml`
+- Scripts operativos:
+  - `scripts/helm-local.ps1`
+  - `scripts/helm-status.ps1`
+  - `scripts/helm-clean.ps1`
+  - `scripts/helm-all.ps1`
 
 ## 14. Estrategia SDD por fases
 
@@ -340,6 +360,7 @@ Debe incluir:
 
 - Lint y validación de Python.
 - Validación sintáctica de manifiestos K8s.
+- Validación de chart Helm (`helm lint` + render de plantillas).
 
 ### 18.3 CD
 
@@ -359,8 +380,10 @@ Debe incluir:
 - Namespace.
 - Imagen backend y tag.
 - Límites de recursos por deployment.
+- Tipo de servicio/NodePorts por dígito.
 - Límite de dígitos.
 - Flags de scale-down y retardo.
+- Release Helm, ruta de chart y archivo de values por entorno.
 
 ## 20. Riesgos y mitigaciones
 
@@ -383,3 +406,4 @@ Debe incluir:
 - Documento técnico de proxy: docs/proxy-tecnico.md
 - Documento técnico de frontend JS: docs/script-tecnico.md
 - Onboarding rápido: docs/onboarding-rapido.md
+- Scripts operativos Helm: scripts/helm-local.ps1, scripts/helm-status.ps1, scripts/helm-clean.ps1, scripts/helm-all.ps1

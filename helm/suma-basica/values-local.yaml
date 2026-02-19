@@ -1,0 +1,47 @@
+# Overrides para entorno local (Minikube/Podman)
+namespace:
+  create: true
+  name: calculadora-suma
+
+image:
+  repository: ghcr.io/lhalha01/contenedores-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - ghcr-secret
+
+# Mantiene comportamiento scale-to-zero inicial
+digits:
+  - id: 0
+    name: unidades
+    replicas: 0
+    service:
+      type: NodePort
+      port: 8000
+      targetPort: 8000
+      nodePort: 30000
+  - id: 1
+    name: decenas
+    replicas: 0
+    service:
+      type: NodePort
+      port: 8000
+      targetPort: 8000
+      nodePort: 30001
+  - id: 2
+    name: centenas
+    replicas: 0
+    service:
+      type: NodePort
+      port: 8000
+      targetPort: 8000
+      nodePort: 30002
+  - id: 3
+    name: millares
+    replicas: 0
+    service:
+      type: NodePort
+      port: 8000
+      targetPort: 8000
+      nodePort: 30003
