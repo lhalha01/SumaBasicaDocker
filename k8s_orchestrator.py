@@ -80,6 +80,41 @@ class K8sOrchestrator:
             self.logger(f"✗ Excepción esperando pod suma-digito-{digito}: {error}", "error")
             return False
 
+    def esperar_endpoints_servicio(self, digito, timeout=30):
+        service_name = f"suma-digito-{digito}"
+        deadline = time.time() + timeout
+
+        self.logger(
+            f"⏳ Esperando endpoints para servicio {service_name}...",
+            "info"
+        )
+
+        while time.time() < deadline:
+            cmd = [
+                "kubectl", "get", "endpoints", service_name,
+                "-n", self.namespace,
+                "-o", "jsonpath={.subsets[*].addresses[*].ip}"
+            ]
+
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0 and result.stdout.strip():
+                    self.logger(
+                        f"✓ Servicio {service_name} tiene endpoints activos",
+                        "success"
+                    )
+                    return True
+            except Exception:
+                pass
+
+            time.sleep(1)
+
+        self.logger(
+            f"✗ Timeout esperando endpoints para servicio {service_name}",
+            "error"
+        )
+        return False
+
     def establecer_port_forward(self, digito):
         try:
             if self.in_cluster:

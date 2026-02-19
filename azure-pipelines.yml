@@ -18,6 +18,7 @@ variables:
   aksClusterName: 'KSuma'
   acrName: 'acrsuma'
   acrLoginServer: 'acrsuma.azurecr.io'
+  ghcrPat: ''
   keyVaultName: 'AHLSecretos'
   ghcrUser: 'lhalha01'
   namespace: 'calculadora-suma'
@@ -186,10 +187,19 @@ stages:
 
                       az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
 
-                      GHCR_PAT=$(az keyvault secret show \
-                        --vault-name "$(keyVaultName)" \
-                        --name "github-pat" \
-                        --query value -o tsv)
+                      GHCR_PAT="$(ghcrPat)"
+
+                      if [ -z "$GHCR_PAT" ]; then
+                        GHCR_PAT=$(az keyvault secret show \
+                          --vault-name "$(keyVaultName)" \
+                          --name "github-pat" \
+                          --query value -o tsv 2>/dev/null || true)
+                      fi
+
+                      if [ -z "$GHCR_PAT" ]; then
+                        echo "ERROR: No se pudo obtener github-pat. Define variable secreta 'ghcrPat' en la pipeline o da permisos de secretos al service principal sobre Key Vault $(keyVaultName)."
+                        exit 1
+                      fi
 
                       kubectl apply -f k8s/namespace.yaml
 

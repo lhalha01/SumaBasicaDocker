@@ -229,6 +229,10 @@ def suma_n_digitos():
             # Esperar a que el pod esté listo
             if not orchestrator.esperar_pod_ready(i, timeout=60):
                 raise Exception(f"El pod suma-digito-{i} no está listo después de 60 segundos")
+
+            # Esperar a que el Service tenga endpoints propagados
+            if not orchestrator.esperar_endpoints_servicio(i, timeout=30):
+                raise Exception(f"El servicio suma-digito-{i} no tiene endpoints disponibles")
             
             # Establecer port-forward para este pod
             if not orchestrator.establecer_port_forward(i):
