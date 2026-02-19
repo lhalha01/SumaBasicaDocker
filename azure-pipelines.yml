@@ -13,7 +13,7 @@ pr:
       - master
 
 variables:
-  azureServiceConnection: 'sc-aks-deploy'
+  azureServiceConnection: 'LabsConn'
   resourceGroup: 'AHL_resources'
   aksClusterName: 'KSuma'
   acrName: ''
