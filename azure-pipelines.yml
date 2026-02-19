@@ -86,6 +86,20 @@ stages:
                 fi
 
                 if [ -z "$ACR_NAME" ]; then
+                  ACR_TOTAL=$(az acr list --query "length(@)" -o tsv)
+                  if [ "$ACR_TOTAL" = "1" ]; then
+                    ACR_NAME=$(az acr list --query "[0].name" -o tsv)
+                  elif [ "$ACR_TOTAL" = "0" ]; then
+                    echo "ERROR: No se encontró ningún ACR en la suscripción. Crea uno o define 'acrName'."
+                    exit 1
+                  else
+                    echo "ERROR: Se encontraron múltiples ACR en la suscripción y ninguno en $(resourceGroup). Define 'acrName'."
+                    az acr list --query "[].{name:name,resourceGroup:resourceGroup,loginServer:loginServer}" -o table
+                    exit 1
+                  fi
+                fi
+
+                if [ -z "$ACR_NAME" ]; then
                   echo "ERROR: No se encontró ACR en el resource group $(resourceGroup). Define 'acrName'."
                   exit 1
                 fi
@@ -141,6 +155,20 @@ stages:
                         ACR_NAME="$(acrName)"
                         if [ -z "$ACR_NAME" ]; then
                           ACR_NAME=$(az acr list -g "$(resourceGroup)" --query "[0].name" -o tsv)
+                        fi
+
+                        if [ -z "$ACR_NAME" ]; then
+                          ACR_TOTAL=$(az acr list --query "length(@)" -o tsv)
+                          if [ "$ACR_TOTAL" = "1" ]; then
+                            ACR_NAME=$(az acr list --query "[0].name" -o tsv)
+                          elif [ "$ACR_TOTAL" = "0" ]; then
+                            echo "ERROR: No se encontró ningún ACR en la suscripción. Crea uno o define 'acrName'."
+                            exit 1
+                          else
+                            echo "ERROR: Se encontraron múltiples ACR en la suscripción y ninguno en $(resourceGroup). Define 'acrName'."
+                            az acr list --query "[].{name:name,resourceGroup:resourceGroup,loginServer:loginServer}" -o table
+                            exit 1
+                          fi
                         fi
 
                         if [ -z "$ACR_NAME" ]; then
