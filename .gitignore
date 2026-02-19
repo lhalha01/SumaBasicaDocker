@@ -1,0 +1,12 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
