@@ -113,7 +113,7 @@ jobs:
               print(f"OK: {file} ({len(docs)} docs)")
           PY
 
-  cacc:
+  cac:
     name: CaC (Compliance as Code)
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +159,7 @@ jobs:
   cd:
     name: CD (Deploy to AKS)
     runs-on: ubuntu-latest
-    needs: [iac, ci, cacc, dac]
+    needs: [iac, ci, cac, dac]
     if: github.ref == 'refs/heads/DigitosDinamicos'
     steps:
       - name: Checkout
