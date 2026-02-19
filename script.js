@@ -100,7 +100,7 @@ async function sumar() {
         containersSection.innerHTML = '<p class="loading-message">⏳ Preparando pods...</p>';
         
         // Llamar al servicio proxy que coordina los pods de Kubernetes
-        const response = await fetch('http://localhost:8080/suma-n-digitos', {
+        const response = await fetch('/suma-n-digitos', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

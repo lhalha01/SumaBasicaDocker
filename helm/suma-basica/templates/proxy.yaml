@@ -1,0 +1,131 @@
+{{- if .Values.proxy.enabled }}
+{{- if and .Values.rbac.create .Values.rbac.serviceAccount.create }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "suma-basica.serviceAccountName" . }}
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+{{- end }}
+{{- if .Values.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "suma-basica.fullname" . }}-proxy
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "suma-basica.fullname" . }}-proxy
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "suma-basica.serviceAccountName" . }}
+    namespace: {{ .Values.namespace.name }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "suma-basica.fullname" . }}-proxy
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "suma-basica.fullname" . }}-proxy
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+    app.kubernetes.io/component: proxy
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  replicas: {{ .Values.proxy.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "suma-basica.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: proxy
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "suma-basica.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: proxy
+    spec:
+      serviceAccountName: {{ include "suma-basica.serviceAccountName" . }}
+{{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+{{- range $secret := .Values.imagePullSecrets }}
+        - name: {{ $secret }}
+{{- end }}
+{{- end }}
+      containers:
+        - name: proxy
+          image: "{{ .Values.proxy.image.repository }}:{{ .Values.proxy.image.tag }}"
+          imagePullPolicy: {{ .Values.proxy.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.proxy.service.targetPort }}
+              name: http
+          env:
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: ORCHESTRATOR_IN_CLUSTER
+              value: {{ .Values.proxy.env.orchestratorInCluster | quote }}
+            - name: BACKEND_SERVICE_PORT
+              value: {{ .Values.proxy.env.backendServicePort | quote }}
+          resources:
+{{ toYaml .Values.proxy.resources | indent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "suma-basica.fullname" . }}-proxy
+  namespace: {{ .Values.namespace.name }}
+  labels:
+{{ include "suma-basica.labels" . | indent 4 }}
+    app.kubernetes.io/component: proxy
+{{- with .Values.commonLabels }}
+{{ toYaml . | indent 4 }}
+{{- end }}
+spec:
+  type: {{ .Values.proxy.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ include "suma-basica.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: proxy
+  ports:
+    - port: {{ .Values.proxy.service.port }}
+      targetPort: {{ .Values.proxy.service.targetPort }}
+      protocol: TCP
+      name: http
+{{- end }}

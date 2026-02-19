@@ -8,6 +8,34 @@ image:
   tag: latest
   pullPolicy: IfNotPresent
 
+proxy:
+  enabled: true
+  replicas: 1
+  image:
+    repository: ghcr.io/lhalha01/contenedores-proxy
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+  env:
+    orchestratorInCluster: true
+    backendServicePort: 8000
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "100m"
+    limits:
+      memory: "256Mi"
+      cpu: "300m"
+
+rbac:
+  create: true
+  serviceAccount:
+    create: true
+    name: ""
+
 imagePullSecrets:
   - ghcr-secret
 

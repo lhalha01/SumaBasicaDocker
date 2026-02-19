@@ -5,11 +5,21 @@ import time
 
 
 class K8sOrchestrator:
-    def __init__(self, logger, namespace="calculadora-suma", max_digitos=4, base_port=31000):
+    def __init__(
+        self,
+        logger,
+        namespace="calculadora-suma",
+        max_digitos=4,
+        base_port=31000,
+        in_cluster=False,
+        service_port=8000
+    ):
         self.logger = logger
         self.namespace = namespace
         self.max_digitos = max_digitos
         self.base_port = base_port
+        self.in_cluster = in_cluster
+        self.service_port = service_port
         self.port_forward_processes = {}
         self.port_forward_ports = {}
 
@@ -72,6 +82,13 @@ class K8sOrchestrator:
 
     def establecer_port_forward(self, digito):
         try:
+            if self.in_cluster:
+                self.logger(
+                    f"✓ Modo in-cluster activo para digito-{digito}: usando servicio interno",
+                    "info"
+                )
+                return True
+
             if digito in self.port_forward_processes:
                 proceso = self.port_forward_processes[digito]
                 if proceso.poll() is None:
@@ -145,6 +162,10 @@ class K8sOrchestrator:
             self.port_forward_ports.pop(digito, None)
 
     def service_url(self, digito):
+        if self.in_cluster:
+            service_name = f"suma-digito-{digito}"
+            return f"http://{service_name}.{self.namespace}.svc.cluster.local:{self.service_port}", self.service_port
+
         local_port = self.port_forward_ports.get(digito, self.base_port + digito)
         return f"http://localhost:{local_port}", local_port
 
@@ -162,7 +183,8 @@ class K8sOrchestrator:
             else:
                 self.logger(f"✗ No se pudo escalar suma-digito-{i} a 0", "error")
 
-            self.detener_port_forward(i)
+            if not self.in_cluster:
+                self.detener_port_forward(i)
 
         self.logger("✓ Scale-down completado: pods en zero", "success")
         self.logger(f"{'-' * 60}\n", "info")

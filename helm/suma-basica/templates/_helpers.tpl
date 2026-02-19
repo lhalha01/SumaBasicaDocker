@@ -21,3 +21,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
+
+{{- define "suma-basica.serviceAccountName" -}}
+{{- if .Values.rbac.serviceAccount.create -}}
+{{- default (printf "%s-proxy" (include "suma-basica.fullname" .)) .Values.rbac.serviceAccount.name -}}
+{{- else -}}
+{{- default "default" .Values.rbac.serviceAccount.name -}}
+{{- end -}}
+{{- end -}}

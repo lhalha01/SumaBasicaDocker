@@ -14,6 +14,10 @@ CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS
 MAX_DIGITOS = 4  # Soporta hasta 9999
 AUTO_SCALE_DOWN = True
 SCALE_DOWN_DELAY_SECONDS = 2
+NAMESPACE = os.getenv("K8S_NAMESPACE", "calculadora-suma")
+ORCHESTRATOR_IN_CLUSTER = os.getenv("ORCHESTRATOR_IN_CLUSTER", "false").lower() == "true"
+ORCHESTRATOR_BASE_PORT = int(os.getenv("ORCHESTRATOR_BASE_PORT", "31000"))
+BACKEND_SERVICE_PORT = int(os.getenv("BACKEND_SERVICE_PORT", "8000"))
 
 # Buffer de logs para terminal embebido en frontend
 terminal_log_buffer = deque(maxlen=1000)
@@ -36,9 +40,11 @@ def registrar_terminal(mensaje, nivel='info'):
 
 orchestrator = K8sOrchestrator(
     logger=registrar_terminal,
-    namespace="calculadora-suma",
+    namespace=NAMESPACE,
     max_digitos=MAX_DIGITOS,
-    base_port=31000
+    base_port=ORCHESTRATOR_BASE_PORT,
+    in_cluster=ORCHESTRATOR_IN_CLUSTER,
+    service_port=BACKEND_SERVICE_PORT
 )
 
 def llamar_servicio_con_reintento(service_url, payload, digito, intentos=3):
