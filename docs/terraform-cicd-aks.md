@@ -1,102 +1,60 @@
-# Terraform + CI/CD para publicar frontal y API en AKS
+# Terraform + Azure DevOps CI/CD para publicar frontal y API en AKS
 
-## 1. Qué se creó
+## 1. Qué incluye esta solución
 
-### Infraestructura (Terraform)
+- Infraestructura con Terraform en [infra/terraform](../infra/terraform)
+- Despliegue Kubernetes en [k8s](../k8s)
+- Pipeline Azure DevOps en [azure-pipelines.yml](../azure-pipelines.yml)
 
-Ruta: [infra/terraform/main.tf](../infra/terraform/main.tf)
+El pipeline hace:
 
-- Resource Group
-- Azure Container Registry (ACR)
-- AKS opcional (crear nuevo o reutilizar uno existente)
-- Rol `AcrPull` para que AKS pueda descargar imágenes del ACR
+1. `terraform init/validate/plan`
+2. build/push de imagen proxy a ACR
+3. despliegue en AKS (namespace, secretos, workloads)
 
-Archivos:
+## 2. Prerrequisitos en Azure DevOps
 
-- [infra/terraform/providers.tf](../infra/terraform/providers.tf)
-- [infra/terraform/variables.tf](../infra/terraform/variables.tf)
-- [infra/terraform/main.tf](../infra/terraform/main.tf)
-- [infra/terraform/outputs.tf](../infra/terraform/outputs.tf)
-- [infra/terraform/terraform.tfvars.example](../infra/terraform/terraform.tfvars.example)
+- Proyecto Azure DevOps con repo conectado
+- Service Connection a Azure (`azureServiceConnection`)
+- Permisos del Service Connection sobre:
+  - Resource Group (Contributor o mínimo equivalente)
+  - AKS (lectura/escritura para despliegue)
+  - ACR (push)
+  - Key Vault (secrets get/list)
 
-### Aplicación en Kubernetes
+## 3. Variables de pipeline necesarias
 
-Ruta: [k8s](../k8s)
+Define estas variables en Azure DevOps (Pipeline variables o Variable Group):
 
-- Namespace
-- Backends `suma-digito-0..3`
-- RBAC para proxy
-- Deployment/Service del proxy (frontal + API)
+- `azureServiceConnection` = nombre de la service connection (por defecto `sc-aks-deploy`)
+- `resourceGroup` = `AHL_resources`
+- `aksClusterName` = `KSuma`
+- `acrName` = nombre corto del ACR (ej. `sumaacrxyz12`)
+- `acrLoginServer` = login server ACR (ej. `sumaacrxyz12.azurecr.io`)
+- `keyVaultName` = `AHLSecretos`
+- `ghcrUser` = `lhalha01`
+- `namespace` = `calculadora-suma`
+- `AKS_KUBELET_OBJECT_ID` = Object ID de kubelet identity (si aplica para Terraform role assignment)
 
-### CI/CD (GitHub Actions)
+## 4. Secretos
 
-Ruta: [.github/workflows/ci-cd-aks.yml](../.github/workflows/ci-cd-aks.yml)
+No se usa `GHCR_PAT` en variables del pipeline.
 
-Jobs:
+El PAT se obtiene de Azure Key Vault:
 
-1. `terraform-plan`
-2. `build-and-push` (imagen proxy a ACR)
-3. `deploy` (aplica manifiestos en AKS)
+- Vault: `AHLSecretos`
+- Secret name: `github-pat`
 
----
+El pipeline lo lee en runtime con Azure CLI y crea/actualiza el `ghcr-secret` en Kubernetes.
 
-## 2. Secrets y Variables en GitHub
+## 5. Ejecución
 
-## Secrets (Repository Secrets)
-
-- `AZURE_CREDENTIALS` (JSON de Service Principal)
-- `GHCR_USER`
-
-> El `GHCR_PAT` se lee desde Azure Key Vault (secreto `github-pat`) durante el pipeline.
-
-## Variables (Repository Variables)
-
-- `AZURE_RESOURCE_GROUP` (ej: `AHL_resources`)
-- `AKS_CLUSTER_NAME` (ej: `KSuma`)
-- `ACR_NAME` (nombre ACR, sin dominio)
-- `ACR_LOGIN_SERVER` (ej: `miacr.azurecr.io`)
-- `AKS_KUBELET_OBJECT_ID` (si reutilizas AKS y quieres que Terraform asigne `AcrPull`)
-- `AZURE_KEYVAULT_NAME` (ej: `AHLSecretos`)
-
----
-
-## 3. Crear credenciales de Azure para GitHub
-
-Ejemplo (ajusta suscripción):
-
-```powershell
-az ad sp create-for-rbac `
-  --name "gh-sumabasica-cicd" `
-  --role contributor `
-  --scopes /subscriptions/<SUBSCRIPTION_ID> `
-  --sdk-auth
-```
-
-El JSON resultante se guarda como `AZURE_CREDENTIALS` en GitHub Secrets.
-
----
-
-## 4. Ejecución local de Terraform (opcional)
-
-```powershell
-cd infra/terraform
-terraform init
-terraform validate
-terraform plan -var="resource_group_name=AHL_resources" -var="existing_aks_name=KSuma"
-```
-
----
-
-## 5. Flujo de despliegue
-
-1. Push a `FrontalSuma`, `ConHelm` o `master`
-2. GitHub Actions ejecuta:
-   - Plan de Terraform
-   - Build/push de imagen proxy a ACR
-   - Deploy a AKS (namespace + workloads)
-3. Verificación automática de rollout del deployment `suma-proxy`
-
----
+1. Push a `FrontalSuma`, `ConHelm` o `master` (trigger automático)
+2. O ejecutar manualmente el pipeline desde Azure DevOps
+3. Revisar stages:
+   - `TerraformPlan`
+   - `BuildAndPush`
+   - `DeployAKS`
 
 ## 6. Validación post-despliegue
 
@@ -105,12 +63,10 @@ kubectl get deployments,services,pods -n calculadora-suma
 kubectl logs -n calculadora-suma deploy/suma-proxy --tail=200
 ```
 
-Si `suma-proxy` está `Running` y el Service tipo LoadBalancer tiene IP pública, abre esa IP para usar el frontal.
+Si `suma-proxy` está `Running` y `proxy-service` tiene endpoint público (LoadBalancer), abre esa URL para usar el frontal.
 
----
+## 7. Notas operativas
 
-## 7. Notas importantes
-
-- El `proxy` necesita `kubectl` dentro de su contenedor para escalar deployments.
-- El frontend usa endpoint relativo (`/suma-n-digitos`), por lo que frontal y API comparten origen.
-- Si no quieres exponer por `LoadBalancer`, cambia [k8s/proxy-service.yaml](../k8s/proxy-service.yaml) a `ClusterIP` y publica con Ingress.
+- El frontend usa ruta relativa (`/suma-n-digitos`) y comparte origen con la API.
+- Los backends `suma-digito-*` arrancan en `replicas: 0` (scale-to-zero inicial).
+- Si prefieres Ingress en lugar de LoadBalancer, cambia [k8s/proxy-service.yaml](../k8s/proxy-service.yaml).

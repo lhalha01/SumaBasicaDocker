@@ -1,0 +1,148 @@
+trigger:
+  branches:
+    include:
+      - FrontalSuma
+      - ConHelm
+      - master
+
+pr:
+  branches:
+    include:
+      - FrontalSuma
+      - ConHelm
+      - master
+
+variables:
+  azureServiceConnection: 'sc-aks-deploy'
+  resourceGroup: 'AHL_resources'
+  aksClusterName: 'KSuma'
+  acrName: ''
+  acrLoginServer: ''
+  keyVaultName: 'AHLSecretos'
+  ghcrUser: 'lhalha01'
+  namespace: 'calculadora-suma'
+  terraformWorkingDir: 'infra/terraform'
+
+stages:
+  - stage: TerraformPlan
+    displayName: 'Terraform Plan'
+    jobs:
+      - job: Plan
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: Bash@3
+            displayName: 'Install Terraform 1.6.6'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
+                curl -fsSL -o terraform.zip https://releases.hashicorp.com/terraform/1.6.6/terraform_1.6.6_linux_amd64.zip
+                unzip -o terraform.zip
+                sudo mv terraform /usr/local/bin/terraform
+                terraform version
+
+          - task: AzureCLI@2
+            displayName: 'Terraform init/validate/plan'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+                cd "$(terraformWorkingDir)"
+                terraform init
+                terraform validate
+                terraform plan \
+                  -var="resource_group_name=$(resourceGroup)" \
+                  -var="existing_aks_name=$(aksClusterName)" \
+                  -var="kubelet_identity_object_id=$(AKS_KUBELET_OBJECT_ID)"
+
+  - stage: BuildAndPush
+    displayName: 'Build and Push Proxy Image'
+    dependsOn: TerraformPlan
+    jobs:
+      - job: BuildPush
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Build and push to ACR'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+                if [ -z "$(acrName)" ] || [ -z "$(acrLoginServer)" ]; then
+                  echo "ERROR: Define variables 'acrName' y 'acrLoginServer' en Azure DevOps pipeline/variable group."
+                  exit 1
+                fi
+
+                az acr login --name "$(acrName)"
+                IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+                docker build -t "$IMAGE" .
+                docker push "$IMAGE"
+                docker tag "$IMAGE" "$(acrLoginServer)/suma-proxy:latest"
+                docker push "$(acrLoginServer)/suma-proxy:latest"
+
+                echo "##vso[task.setvariable variable=proxyImage;isOutput=true]$IMAGE"
+            name: buildMeta
+
+  - stage: DeployAKS
+    displayName: 'Deploy to AKS'
+    dependsOn: BuildAndPush
+    jobs:
+      - deployment: Deploy
+        environment: 'aks-frontal'
+        pool:
+          vmImage: 'ubuntu-latest'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+
+                - task: AzureCLI@2
+                  displayName: 'AKS deploy workloads'
+                  inputs:
+                    azureSubscription: '$(azureServiceConnection)'
+                    scriptType: 'bash'
+                    scriptLocation: 'inlineScript'
+                    inlineScript: |
+                      set -euo pipefail
+
+                      if [ -z "$(acrLoginServer)" ]; then
+                        echo "ERROR: Define variable 'acrLoginServer'."
+                        exit 1
+                      fi
+
+                      az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
+
+                      GHCR_PAT=$(az keyvault secret show \
+                        --vault-name "$(keyVaultName)" \
+                        --name "github-pat" \
+                        --query value -o tsv)
+
+                      kubectl apply -f k8s/namespace.yaml
+
+                      kubectl create secret docker-registry ghcr-secret \
+                        --namespace "$(namespace)" \
+                        --docker-server=ghcr.io \
+                        --docker-username="$(ghcrUser)" \
+                        --docker-password="$GHCR_PAT" \
+                        --dry-run=client -o yaml | kubectl apply -f -
+
+                      kubectl apply -f k8s/backend-workloads.yaml
+                      kubectl apply -f k8s/proxy-rbac.yaml
+
+                      IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+                      sed "s|__PROXY_IMAGE__|$IMAGE|g" k8s/proxy-deployment.yaml | kubectl apply -f -
+                      kubectl apply -f k8s/proxy-service.yaml
+
+                      kubectl rollout status deployment/suma-proxy -n "$(namespace)" --timeout=300s
+                      kubectl get deployments,services,pods -n "$(namespace)"
