@@ -1,3 +1,81 @@
+let autoScrollEnabled = true;
+let terminalEventSource = null;
+let terminalStreamConnected = false;
+let terminalStatusState = 'connecting';
+
+function setTerminalStatus(state, text) {
+    const status = document.getElementById('terminal-status');
+    if (!status || terminalStatusState === state) {
+        return;
+    }
+
+    terminalStatusState = state;
+    status.classList.remove('terminal-status-connected', 'terminal-status-connecting', 'terminal-status-retrying');
+
+    if (state === 'connected') {
+        status.classList.add('terminal-status-connected');
+    } else if (state === 'retrying') {
+        status.classList.add('terminal-status-retrying');
+    } else {
+        status.classList.add('terminal-status-connecting');
+    }
+
+    status.textContent = `● ${text}`;
+}
+
+function appendTerminalLine(message, level = 'info') {
+    const container = document.getElementById('scaling-log');
+    if (!container) return;
+
+    const emptyMessage = container.querySelector('.empty-message');
+    if (emptyMessage) {
+        emptyMessage.remove();
+    }
+
+    const line = document.createElement('div');
+    line.className = `terminal-line terminal-${level}`;
+    line.textContent = message;
+    container.appendChild(line);
+
+    if (autoScrollEnabled) {
+        container.scrollTop = container.scrollHeight;
+    }
+}
+
+function connectTerminalStream() {
+    if (terminalEventSource) {
+        terminalEventSource.close();
+    }
+
+    setTerminalStatus('connecting', 'Conectando...');
+
+    terminalEventSource = new EventSource('/terminal-stream');
+
+    terminalEventSource.onopen = () => {
+        terminalStreamConnected = true;
+        setTerminalStatus('connected', 'Conectado');
+        appendTerminalLine('[STREAM] Conectado a logs en vivo del proxy', 'success');
+    };
+
+    terminalEventSource.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            const timestamp = data.timestamp ? `[${data.timestamp}] ` : '';
+            appendTerminalLine(`${timestamp}${data.message}`, data.level || 'info');
+        } catch {
+            appendTerminalLine(event.data, 'info');
+        }
+    };
+
+    terminalEventSource.onerror = () => {
+        setTerminalStatus('retrying', 'Reintentando...');
+        if (terminalStreamConnected) {
+            appendTerminalLine('[STREAM] Desconectado. Reintentando...', 'warning');
+        }
+        terminalStreamConnected = false;
+    };
+}
+
 async function sumar() {
     const numberA = parseInt(document.getElementById('numeroA').value) || 0;
     const numberB = parseInt(document.getElementById('numeroB').value) || 0;
@@ -14,9 +92,8 @@ async function sumar() {
         document.getElementById('pods-usados').textContent = '...';
         document.getElementById('carry-final').textContent = '...';
         
-        // Limpiar log de escalado y mostrar mensaje de carga
-        const scalingLog = document.getElementById('scaling-log');
-        scalingLog.innerHTML = '<p class="loading-message">⏳ Escalando pods necesarios...</p>';
+        appendTerminalLine(`$ sumar ${numberA} ${numberB}`, 'info');
+        appendTerminalLine('⏳ Ejecutando operación...', 'info');
         
         // Limpiar sección de pods antes de la nueva operación
         const containersSection = document.getElementById('containers-list');
@@ -239,37 +316,97 @@ function renderPodDetails(details) {
 }
 
 function renderScalingEvents(eventos) {
+    if (terminalStreamConnected) {
+        return;
+    }
+
     const container = document.getElementById('scaling-log');
     
     if (!eventos || eventos.length === 0) {
-        container.innerHTML = '<p class="empty-message">No hay eventos de escalado disponibles</p>';
+        container.innerHTML = `
+            <div class="terminal-prompt">root@k8s-proxy:~# <span class="blinking-cursor">_</span></div>
+            <p class="empty-message">No hay eventos de escalado disponibles</p>
+        `;
         return;
     }
     
     // Limpiar contenedor
-    container.innerHTML = '';
+    container.innerHTML = `
+        <div class="terminal-prompt">root@k8s-proxy:~# kubectl scale --namespace calculadora-suma</div>
+    `;
+
+    const separator = document.createElement('div');
+    separator.className = 'terminal-separator';
+    separator.textContent = '═'.repeat(70);
+    container.appendChild(separator);
     
     eventos.forEach((evento, index) => {
-        const eventItem = document.createElement('div');
-        eventItem.className = `scaling-trace scaling-trace-${evento.Tipo}`;
-        
-        // Agregar animación de entrada con delay
-        eventItem.style.animationDelay = `${index * 0.05}s`;
-        
-        let icon = '⚙️';
-        if (evento.Tipo === 'listo') icon = '✅';
-        else if (evento.Tipo === 'espera') icon = '⏳';
-        else if (evento.Tipo === 'escalado') icon = '🚀';
-        
-        // Formato simplificado tipo traza
-        eventItem.textContent = `[${evento.Timestamp}] ${icon} ${evento.Posicion} - ${evento.Estado}`;
-        
-        container.appendChild(eventItem);
+        setTimeout(() => {
+            const eventItem = document.createElement('div');
+            eventItem.className = `scaling-trace scaling-trace-${evento.Tipo}`;
+            
+            let prefix = '[INFO]';
+            let message = `${evento.Posicion} - ${evento.Estado}`;
+
+            if (evento.Tipo === 'escalado') {
+                prefix = '[SCALE]';
+                message = `Escalando ${evento.Pod} (${evento.Posicion})...`;
+            } else if (evento.Tipo === 'espera') {
+                prefix = '[WAIT]';
+                message = `Esperando ${evento.Pod} en estado Ready...`;
+            } else if (evento.Tipo === 'listo') {
+                prefix = '[OK]';
+                message = `${evento.Pod} listo ${evento.Estado}`;
+            }
+
+            eventItem.textContent = `[${evento.Timestamp}] ${prefix} ${message}`;
+            container.appendChild(eventItem);
+
+            if (autoScrollEnabled) {
+                container.scrollTop = container.scrollHeight;
+            }
+        }, index * 90);
     });
+
+    setTimeout(() => {
+        const doneItem = document.createElement('div');
+        doneItem.className = 'terminal-success';
+        doneItem.textContent = '[DONE] Operación de escalado completada';
+        container.appendChild(doneItem);
+
+        if (autoScrollEnabled) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }, eventos.length * 90 + 120);
+}
+
+function clearTerminal() {
+    const container = document.getElementById('scaling-log');
+    container.innerHTML = `
+        <div class="terminal-prompt">root@k8s-proxy:~# <span class="blinking-cursor">_</span></div>
+        <p class="empty-message">Terminal limpiado. Esperando operaciones...</p>
+    `;
+
+    fetch('/terminal-clear', { method: 'POST' }).catch(() => {});
+}
+
+function toggleAutoScroll() {
+    autoScrollEnabled = !autoScrollEnabled;
+    const button = document.getElementById('btnAutoScroll');
+
+    if (autoScrollEnabled) {
+        button.textContent = '🔽 Auto-scroll: ON';
+        button.classList.add('active');
+    } else {
+        button.textContent = '⏸️ Auto-scroll: OFF';
+        button.classList.remove('active');
+    }
 }
 
 // Permitir usar Enter para ejecutar la suma
 document.addEventListener('DOMContentLoaded', function() {
+    connectTerminalStream();
+
     const inputs = document.querySelectorAll('input[type="number"]');
     inputs.forEach(input => {
         input.addEventListener('keypress', function(event) {

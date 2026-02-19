@@ -8,7 +8,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>🚀 Calculadora con Kubernetes</h1>
+        <h1>Calculadora con Kubernetes</h1>
         <p class="subtitle">Suma números de hasta 4 dígitos (0-9999) usando pods en cascada</p>
         
         <div class="input-section">
@@ -51,9 +51,17 @@
         </div>
         
         <div class="scaling-section">
-            <h3>⚙️ Evolución del Escalado Dinámico</h3>
-            <div id="scaling-log" class="scaling-log">
-                <p class="empty-message">Los eventos de escalado aparecerán aquí...</p>
+            <div class="terminal-header">
+                <h3>⚙️ Terminal de Escalado Dinámico</h3>
+                <span id="terminal-status" class="terminal-status terminal-status-connecting">● Conectando...</span>
+                <div class="terminal-buttons">
+                    <button id="btn-clear-terminal" class="btn-clear" onclick="clearTerminal()">Limpiar</button>
+                    <button id="btnAutoScroll" class="btn-autoscroll active" onclick="toggleAutoScroll()">🔽 Auto-scroll: ON</button>
+                </div>
+            </div>
+            <div id="scaling-log" class="scaling-log terminal-output">
+                <div class="terminal-prompt">root@k8s-proxy:~# <span class="blinking-cursor">_</span></div>
+                <p class="empty-message">Esperando operaciones...</p>
             </div>
         </div>
         
