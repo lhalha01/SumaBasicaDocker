@@ -13,7 +13,7 @@ pr:
       - master
 
 variables:
-  azureServiceConnection: 'sc-aks-deploy'
+  azureServiceConnection: 'LabsConn'
   resourceGroup: 'AHL_resources'
   aksClusterName: 'KSuma'
   acrName: ''
@@ -78,17 +78,36 @@ stages:
               scriptLocation: 'inlineScript'
               inlineScript: |
                 set -euo pipefail
-                if [ -z "$(acrName)" ] || [ -z "$(acrLoginServer)" ]; then
-                  echo "ERROR: Define variables 'acrName' y 'acrLoginServer' en Azure DevOps pipeline/variable group."
+                ACR_NAME="$(acrName)"
+                ACR_LOGIN_SERVER="$(acrLoginServer)"
+
+                if [ -z "$ACR_NAME" ]; then
+                  ACR_NAME=$(az acr list -g "$(resourceGroup)" --query "[0].name" -o tsv)
+                fi
+
+                if [ -z "$ACR_NAME" ]; then
+                  echo "ERROR: No se encontró ACR en el resource group $(resourceGroup). Define 'acrName'."
                   exit 1
                 fi
 
-                az acr login --name "$(acrName)"
-                IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+                if [ -z "$ACR_LOGIN_SERVER" ]; then
+                  ACR_LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+                fi
+
+                if [ -z "$ACR_LOGIN_SERVER" ]; then
+                  echo "ERROR: No se pudo resolver loginServer para ACR '$ACR_NAME'. Define 'acrLoginServer'."
+                  exit 1
+                fi
+
+                echo "##vso[task.setvariable variable=acrName]$ACR_NAME"
+                echo "##vso[task.setvariable variable=acrLoginServer]$ACR_LOGIN_SERVER"
+
+                az acr login --name "$ACR_NAME"
+                IMAGE="$ACR_LOGIN_SERVER/suma-proxy:$(Build.SourceVersion)"
                 docker build -t "$IMAGE" .
                 docker push "$IMAGE"
-                docker tag "$IMAGE" "$(acrLoginServer)/suma-proxy:latest"
-                docker push "$(acrLoginServer)/suma-proxy:latest"
+                docker tag "$IMAGE" "$ACR_LOGIN_SERVER/suma-proxy:latest"
+                docker push "$ACR_LOGIN_SERVER/suma-proxy:latest"
 
                 echo "##vso[task.setvariable variable=proxyImage;isOutput=true]$IMAGE"
             name: buildMeta
@@ -116,8 +135,24 @@ stages:
                     inlineScript: |
                       set -euo pipefail
 
-                      if [ -z "$(acrLoginServer)" ]; then
-                        echo "ERROR: Define variable 'acrLoginServer'."
+                      ACR_LOGIN_SERVER="$(acrLoginServer)"
+
+                      if [ -z "$ACR_LOGIN_SERVER" ]; then
+                        ACR_NAME="$(acrName)"
+                        if [ -z "$ACR_NAME" ]; then
+                          ACR_NAME=$(az acr list -g "$(resourceGroup)" --query "[0].name" -o tsv)
+                        fi
+
+                        if [ -z "$ACR_NAME" ]; then
+                          echo "ERROR: No se encontró ACR en el resource group $(resourceGroup). Define 'acrName'."
+                          exit 1
+                        fi
+
+                        ACR_LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+                      fi
+
+                      if [ -z "$ACR_LOGIN_SERVER" ]; then
+                        echo "ERROR: No se pudo resolver 'acrLoginServer'."
                         exit 1
                       fi
 
@@ -140,7 +175,7 @@ stages:
                       kubectl apply -f k8s/backend-workloads.yaml
                       kubectl apply -f k8s/proxy-rbac.yaml
 
-                      IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+                      IMAGE="$ACR_LOGIN_SERVER/suma-proxy:$(Build.SourceVersion)"
                       sed "s|__PROXY_IMAGE__|$IMAGE|g" k8s/proxy-deployment.yaml | kubectl apply -f -
                       kubectl apply -f k8s/proxy-service.yaml
 
