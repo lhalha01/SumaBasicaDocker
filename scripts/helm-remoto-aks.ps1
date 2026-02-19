@@ -43,6 +43,14 @@ function Resolve-FullPath {
     return [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot $PathValue))
 }
 
+function Ensure-LastExit {
+    param([Parameter(Mandatory = $true)][string]$StepName)
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Fallo en '$StepName' (exit code $LASTEXITCODE)."
+    }
+}
+
 Write-Host "[1/8] Validando herramientas..." -ForegroundColor Cyan
 Require-Command "az"
 Require-Command "kubectl"
@@ -67,11 +75,13 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($accountInfo)) {
 Write-Host "[3/8] Seleccionando suscripción (si aplica)..." -ForegroundColor Cyan
 if (-not [string]::IsNullOrWhiteSpace($SubscriptionId)) {
     az account set --subscription $SubscriptionId | Out-Null
+    Ensure-LastExit "az account set"
 }
 
 if (-not $SkipAksCredentials) {
     Write-Host "[4/8] Obteniendo credenciales de AKS..." -ForegroundColor Cyan
     az aks get-credentials --resource-group $ResourceGroup --name $ClusterName --overwrite-existing | Out-Null
+    Ensure-LastExit "az aks get-credentials"
 }
 else {
     Write-Host "[4/8] Saltando obtención de credenciales AKS (SkipAksCredentials)." -ForegroundColor Yellow
@@ -79,10 +89,13 @@ else {
 
 Write-Host "[5/8] Creando namespace (idempotente)..." -ForegroundColor Cyan
 kubectl create namespace $Namespace --dry-run=client -o yaml | kubectl apply -f - | Out-Null
+Ensure-LastExit "kubectl create/apply namespace"
 
 Write-Host "[6/8] Validando chart Helm..." -ForegroundColor Cyan
 helm lint $chartFullPath
+Ensure-LastExit "helm lint"
 helm template $ReleaseName $chartFullPath -n $Namespace -f $valuesFullPath | Out-Null
+Ensure-LastExit "helm template"
 
 if ($ValidateOnly) {
     Write-Host "Validación completada. No se desplegó nada (-ValidateOnly)." -ForegroundColor Green
@@ -100,9 +113,11 @@ kubectl create secret docker-registry $GhcrSecretName `
     --docker-username=$GithubUser `
     --docker-password=$GithubPat `
     --dry-run=client -o yaml | kubectl apply -f - | Out-Null
+Ensure-LastExit "kubectl create/apply ghcr secret"
 
 Write-Host "[8/8] Desplegando release Helm..." -ForegroundColor Cyan
-helm upgrade --install $ReleaseName $chartFullPath --namespace $Namespace --create-namespace -f $valuesFullPath --wait --timeout $HelmTimeout
+helm upgrade --install $ReleaseName $chartFullPath --namespace $Namespace --create-namespace -f $valuesFullPath --set namespace.create=false --wait --timeout $HelmTimeout
+Ensure-LastExit "helm upgrade --install"
 
 Write-Host "Despliegue remoto completado." -ForegroundColor Green
 Write-Host "Comandos útiles:" -ForegroundColor Gray
