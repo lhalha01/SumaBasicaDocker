@@ -1,6 +1,0 @@
-apiVersion: v2
-name: suma-basica
-description: Chart Helm para la calculadora distribuida por dígitos con escalado dinámico
-type: application
-version: 0.1.0
-appVersion: "1.0.0"
