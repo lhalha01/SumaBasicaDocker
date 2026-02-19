@@ -594,6 +594,12 @@ Invoke-WebRequest -Uri "http://localhost:8080/suma-n-digitos" -Method POST -Body
 
 Este proyecto tiene 3 ramas con diferentes niveles de complejidad:
 
+### Política de ramas operativas
+
+- `DigitosDinamicos` y `ConHelm` se mantienen como versiones operativas distintas.
+- No se realiza merge entre ambas ramas para preservar escenarios de operación diferentes.
+- Los cambios deben aplicarse de forma intencional en la rama objetivo correspondiente.
+
 ### `master` - Un Dígito (0-9)
 
 - 1 contenedor Podman

@@ -113,3 +113,9 @@ Esperado en reposo (rama dinámica): deployments en `0/0` tras completar una ope
 - Validar que deployments vuelven a `0/0`.
 - Ejecutar `./scripts/helm-all.ps1 -ValidateOnly` para validar chart y estado.
 - Mantener cambios en la rama de versión correspondiente (sin PR si así se gestiona el repositorio).
+
+## 10) Política de ramas operativas
+
+- `DigitosDinamicos` y `ConHelm` se mantienen como versiones operativas distintas.
+- No se realiza merge entre ambas ramas para preservar escenarios de operación diferentes.
+- Los cambios deben aplicarse de forma intencional en la rama objetivo correspondiente.
