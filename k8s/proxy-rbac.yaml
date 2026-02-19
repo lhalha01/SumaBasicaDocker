@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: suma-proxy
+  namespace: calculadora-suma
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: suma-proxy-role
+  namespace: calculadora-suma
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "deployments/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: suma-proxy-rolebinding
+  namespace: calculadora-suma
+subjects:
+  - kind: ServiceAccount
+    name: suma-proxy
+    namespace: calculadora-suma
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: suma-proxy-role

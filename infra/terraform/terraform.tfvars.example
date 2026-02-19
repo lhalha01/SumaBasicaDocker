@@ -1,0 +1,14 @@
+location            = "spaincentral"
+resource_group_name = "AHL_resources"
+
+# false para reutilizar KSuma
+create_aks         = false
+existing_aks_name  = "KSuma"
+kubelet_identity_object_id = ""
+
+# true para crear AKS nuevo
+# create_aks = true
+# aks_name   = "ksuma-tf"
+# node_count = 1
+
+acr_name_prefix = "sumaacr"
