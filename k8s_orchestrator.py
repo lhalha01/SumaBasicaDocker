@@ -90,15 +90,40 @@ class K8sOrchestrator:
         )
 
         while time.time() < deadline:
-            cmd = [
+            cmd_endpoints = [
                 "kubectl", "get", "endpoints", service_name,
                 "-n", self.namespace,
                 "-o", "jsonpath={.subsets[*].addresses[*].ip}"
             ]
 
+            cmd_endpoint_slices = [
+                "kubectl", "get", "endpointslices",
+                "-n", self.namespace,
+                "-l", f"kubernetes.io/service-name={service_name}",
+                "-o", "jsonpath={.items[*].endpoints[*].addresses[*]}"
+            ]
+
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                if result.returncode == 0 and result.stdout.strip():
+                result_endpoints = subprocess.run(
+                    cmd_endpoints,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+                result_endpoint_slices = subprocess.run(
+                    cmd_endpoint_slices,
+                    capture_output=True,
+                    text=True,
+                    timeout=10
+                )
+
+                has_endpoints = result_endpoints.returncode == 0 and result_endpoints.stdout.strip()
+                has_endpoint_slices = (
+                    result_endpoint_slices.returncode == 0
+                    and result_endpoint_slices.stdout.strip()
+                )
+
+                if has_endpoints or has_endpoint_slices:
                     self.logger(
                         f"✓ Servicio {service_name} tiene endpoints activos",
                         "success"

@@ -230,9 +230,12 @@ def suma_n_digitos():
             if not orchestrator.esperar_pod_ready(i, timeout=60):
                 raise Exception(f"El pod suma-digito-{i} no está listo después de 60 segundos")
 
-            # Esperar a que el Service tenga endpoints propagados
-            if not orchestrator.esperar_endpoints_servicio(i, timeout=30):
-                raise Exception(f"El servicio suma-digito-{i} no tiene endpoints disponibles")
+            # Esperar a que el Service tenga endpoints propagados (si falla, continuar con reintentos HTTP)
+            if not orchestrator.esperar_endpoints_servicio(i, timeout=45):
+                registrar_terminal(
+                    f"⚠ El servicio suma-digito-{i} aún no expone endpoints; se continuará con reintentos de conexión.",
+                    'warning'
+                )
             
             # Establecer port-forward para este pod
             if not orchestrator.establecer_port_forward(i):
@@ -265,7 +268,7 @@ def suma_n_digitos():
                 'CarryIn': carry_in
             }
 
-            data_response = llamar_servicio_con_reintento(service_url, payload, i, intentos=3)
+            data_response = llamar_servicio_con_reintento(service_url, payload, i, intentos=8)
             result = data_response['Result']
             carry_out = data_response['CarryOut']
             
