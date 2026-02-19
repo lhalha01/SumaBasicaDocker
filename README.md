@@ -292,6 +292,18 @@ Start-Job -ScriptBlock { kubectl port-forward -n calculadora-suma service/suma-d
 python proxy.py
 ```
 
+Arranque recomendado en local (reinicia proxy previo y valida salud):
+
+```powershell
+./scripts/run-local.ps1
+```
+
+Si necesitas instalar dependencias automáticamente:
+
+```powershell
+./scripts/run-local.ps1 -InstallDeps
+```
+
 ### 6. Abrir la Aplicación
 
 Navega a: **<http://localhost:8080>**
@@ -310,7 +322,8 @@ SumaBasicaDocker/
 │   ├── helm-local.ps1      # Validación + despliegue Helm local
 │   ├── helm-status.ps1     # Diagnóstico de release/pods/eventos
 │   ├── helm-clean.ps1      # Limpieza de release/namespace/secret
-│   └── helm-all.ps1        # Flujo completo (deploy + diagnóstico)
+│   ├── helm-all.ps1        # Flujo completo (deploy + diagnóstico)
+│   └── run-local.ps1       # Arranque local del proxy + health check
 ├── index.html              # Frontend con visualización dinámica de pods
 ├── script.js               # Lógica JavaScript (llama a /suma-n-digitos)
 ├── styles.css              # Estilos CSS con tema Kubernetes
