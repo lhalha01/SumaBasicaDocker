@@ -1,0 +1,179 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suma-digito-0
+  namespace: calculadora-suma
+  labels:
+    app: suma-backend
+    digito: "0"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: suma-backend
+      digito: "0"
+  template:
+    metadata:
+      labels:
+        app: suma-backend
+        digito: "0"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: suma-api
+          image: ghcr.io/lhalha01/contenedores-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suma-digito-0
+  namespace: calculadora-suma
+spec:
+  type: ClusterIP
+  selector:
+    app: suma-backend
+    digito: "0"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suma-digito-1
+  namespace: calculadora-suma
+  labels:
+    app: suma-backend
+    digito: "1"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: suma-backend
+      digito: "1"
+  template:
+    metadata:
+      labels:
+        app: suma-backend
+        digito: "1"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: suma-api
+          image: ghcr.io/lhalha01/contenedores-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suma-digito-1
+  namespace: calculadora-suma
+spec:
+  type: ClusterIP
+  selector:
+    app: suma-backend
+    digito: "1"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suma-digito-2
+  namespace: calculadora-suma
+  labels:
+    app: suma-backend
+    digito: "2"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: suma-backend
+      digito: "2"
+  template:
+    metadata:
+      labels:
+        app: suma-backend
+        digito: "2"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: suma-api
+          image: ghcr.io/lhalha01/contenedores-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suma-digito-2
+  namespace: calculadora-suma
+spec:
+  type: ClusterIP
+  selector:
+    app: suma-backend
+    digito: "2"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suma-digito-3
+  namespace: calculadora-suma
+  labels:
+    app: suma-backend
+    digito: "3"
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: suma-backend
+      digito: "3"
+  template:
+    metadata:
+      labels:
+        app: suma-backend
+        digito: "3"
+    spec:
+      imagePullSecrets:
+        - name: ghcr-secret
+      containers:
+        - name: suma-api
+          image: ghcr.io/lhalha01/contenedores-backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suma-digito-3
+  namespace: calculadora-suma
+spec:
+  type: ClusterIP
+  selector:
+    app: suma-backend
+    digito: "3"
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8000
+      targetPort: 8000
