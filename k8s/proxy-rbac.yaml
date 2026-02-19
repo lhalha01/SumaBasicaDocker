@@ -11,7 +11,10 @@ metadata:
   namespace: calculadora-suma
 rules:
   - apiGroups: [""]
-    resources: ["pods", "services"]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments", "deployments/scale"]
