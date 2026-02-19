@@ -1,0 +1,193 @@
+name: AKS Platform Delivery (IaC + CI + CD + CaC + DaC)
+
+on:
+  push:
+    branches: [ "DigitosDinamicos", "master" ]
+    paths:
+      - "k8s/**"
+      - "infra/**"
+      - "proxy.py"
+      - "script.js"
+      - "index.html"
+      - "styles.css"
+      - "README.md"
+      - "docs/**"
+      - ".github/workflows/aks-platform-delivery.yml"
+  pull_request:
+    branches: [ "DigitosDinamicos", "master" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  security-events: write
+
+env:
+  RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AKS_CLUSTER: ${{ vars.AZURE_AKS_CLUSTER }}
+  LOCATION: ${{ vars.AZURE_LOCATION || 'westeurope' }}
+  NAMESPACE: calculadora-suma
+
+jobs:
+  iac:
+    name: IaC Terraform (Infrastructure as Code)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Detect Terraform folder
+        id: infra_check
+        run: |
+          if [ -d "infra" ] && [ -n "$(find infra -maxdepth 2 -name '*.tf' -print -quit)" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Terraform format check
+        if: steps.infra_check.outputs.exists == 'true'
+        run: |
+          terraform -chdir=infra fmt -check -recursive
+
+      - name: Terraform init
+        if: steps.infra_check.outputs.exists == 'true'
+        run: |
+          terraform -chdir=infra init -input=false
+
+      - name: Terraform validate
+        if: steps.infra_check.outputs.exists == 'true'
+        run: |
+          terraform -chdir=infra validate
+
+      - name: Terraform plan
+        if: steps.infra_check.outputs.exists == 'true'
+        run: |
+          terraform -chdir=infra plan -input=false -out=tfplan
+
+      - name: Terraform apply (optional)
+        if: steps.infra_check.outputs.exists == 'true' && github.ref == 'refs/heads/DigitosDinamicos' && github.event_name != 'pull_request'
+        run: |
+          terraform -chdir=infra apply -input=false -auto-approve tfplan
+
+  ci:
+    name: CI (Code Quality + Build Validation)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install QA tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Python static checks
+        run: |
+          ruff check proxy.py
+          python -m py_compile proxy.py
+
+      - name: Validate Kubernetes manifests syntax
+        run: |
+          python - << 'PY'
+          import yaml
+          from pathlib import Path
+          for file in Path('k8s').glob('*.yaml'):
+              with open(file, 'r', encoding='utf-8') as f:
+                  docs = list(yaml.safe_load_all(f))
+              print(f"OK: {file} ({len(docs)} docs)")
+          PY
+
+  cacc:
+    name: CaC (Compliance as Code)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Checkov IaC/K8s policy scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: kubernetes,secrets,github_actions
+          soft_fail: false
+          output_format: cli,sarif
+          output_file_path: console,results.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: results.sarif
+
+  dac:
+    name: DaC (Documentation as Code)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Lint markdown docs
+        run: |
+          npm i -g markdownlint-cli
+          markdownlint README.md docs/**/*.md
+
+      - name: Verify architecture section exists
+        run: |
+          grep -q "## Arquitectura del Sistema" README.md
+          grep -q "```mermaid" README.md
+
+  cd:
+    name: CD (Deploy to AKS)
+    runs-on: ubuntu-latest
+    needs: [iac, ci, cacc, dac]
+    if: github.ref == 'refs/heads/DigitosDinamicos'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.AKS_CLUSTER }}
+
+      - name: Ensure namespace
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+
+      - name: Deploy workloads
+        run: |
+          kubectl apply -f k8s/deployment.yaml
+
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/suma-digito-0 -n $NAMESPACE --timeout=180s
+          kubectl rollout status deployment/suma-digito-1 -n $NAMESPACE --timeout=180s
+          kubectl rollout status deployment/suma-digito-2 -n $NAMESPACE --timeout=180s
+          kubectl rollout status deployment/suma-digito-3 -n $NAMESPACE --timeout=180s
+          kubectl get all -n $NAMESPACE

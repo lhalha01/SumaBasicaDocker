@@ -1,0 +1,13 @@
+resource_group_name = "rg-sumabasica-aks-dev"
+location            = "westeurope"
+aks_cluster_name    = "aks-sumabasica-dev"
+dns_prefix          = "sumabasica"
+node_count          = 1
+node_vm_size        = "Standard_B2s"
+kubernetes_version  = null
+
+tags = {
+  project = "SumaBasicaDocker"
+  env     = "dev"
+  owner   = "lhalha01"
+}
