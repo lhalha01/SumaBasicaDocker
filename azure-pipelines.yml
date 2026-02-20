@@ -75,6 +75,9 @@ stages:
             displayName: 'Run SonarCloud analysis (CLI)'
             env:
               SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_ORGANIZATION: $(sonarOrganization)
+              SONAR_PROJECT_KEY: $(sonarProjectKey)
+              SONAR_PROJECT_NAME: $(sonarProjectName)
             inputs:
               targetType: 'inline'
               script: |
