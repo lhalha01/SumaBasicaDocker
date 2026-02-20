@@ -2,8 +2,6 @@ trigger:
   branches:
     include:
       - FrontalSuma
-      - ConHelm
-      - master
 
 pr:
   branches:
