@@ -216,18 +216,20 @@ stages:
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 0 \
+                  --skip-dirs trivy-reports \
                   --quiet \
                   --format json \
                   --output trivy-reports/trivy-config-report.json \
-                  k8s infra Dockerfile
+                  .
 
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 0 \
+                  --skip-dirs trivy-reports \
                   --quiet \
                   --format sarif \
                   --output trivy-reports/trivy-config-report.sarif \
-                  k8s infra Dockerfile
+                  .
 
           - task: PublishPipelineArtifact@1
             displayName: 'Publish Trivy reports'
@@ -255,8 +257,9 @@ stages:
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 1 \
+                  --skip-dirs trivy-reports \
                   --quiet \
-                  k8s infra Dockerfile
+                  .
 
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
