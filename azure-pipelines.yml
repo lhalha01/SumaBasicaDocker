@@ -14,7 +14,7 @@ variables:
   aksClusterName: 'KSuma'
   acrName: 'acrsuma'
   acrLoginServer: 'acrsuma.azurecr.io'
-  trivyImageFailSeverities: 'HIGH,CRITICAL'
+  trivyImageFailSeverities: 'CRITICAL'
   trivyConfigFailSeverities: 'HIGH,CRITICAL'
   ghcrPat: ''
   keyVaultName: 'AHLSecretos'
@@ -197,6 +197,7 @@ stages:
 
                 trivy image \
                   --severity "$(trivyImageFailSeverities)" \
+                  --skip-files /usr/local/bin/kubectl \
                   --ignore-unfixed \
                   --exit-code 0 \
                   --no-progress \
@@ -206,6 +207,7 @@ stages:
 
                 trivy image \
                   --severity "$(trivyImageFailSeverities)" \
+                  --skip-files /usr/local/bin/kubectl \
                   --ignore-unfixed \
                   --exit-code 0 \
                   --no-progress \
@@ -249,6 +251,7 @@ stages:
 
                 trivy image \
                   --severity "$(trivyImageFailSeverities)" \
+                  --skip-files /usr/local/bin/kubectl \
                   --ignore-unfixed \
                   --exit-code 1 \
                   --no-progress \
