@@ -14,6 +14,9 @@ RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 COPY proxy.py k8s_orchestrator.py index.html script.js styles.css ./
+RUN addgroup --system appgroup \
+    && adduser --system --ingroup appgroup --home /app appuser \
+    && chown -R appuser:appgroup /app
 
 ENV K8S_NAMESPACE=calculadora-suma
 ENV ORCHESTRATOR_IN_CLUSTER=true
@@ -21,5 +24,7 @@ ENV BACKEND_SERVICE_PORT=8000
 ENV PYTHONUNBUFFERED=1
 
 EXPOSE 8080
+
+USER appuser
 
 CMD ["python", "proxy.py"]
