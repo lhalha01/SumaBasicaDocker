@@ -17,26 +17,26 @@ RUN pip install --no-cache-dir \
 # Copiar código fuente y documentación
 COPY . .
 
-# Generar API Reference con pdoc en formato markdown
-RUN pdoc proxy.py k8s_orchestrator.py \
-    --output-dir /tmp/pdoc_out \
-    --format markdown 2>/dev/null || true
+# Generar API Reference con pdoc (stdout → markdown file)
+RUN pdoc proxy --format markdown > docs/api/proxy.md 2>/dev/null || \
+    echo "# proxy.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/proxy.md
+RUN pdoc k8s_orchestrator --format markdown > docs/api/orchestrator.md 2>/dev/null || \
+    echo "# k8s_orchestrator.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/orchestrator.md
 
-# Copiar docs generadas por pdoc si se crearon correctamente
-RUN if [ -f /tmp/pdoc_out/proxy.md ]; then \
-      cp /tmp/pdoc_out/proxy.md docs/api/proxy.md; \
-    fi && \
-    if [ -f /tmp/pdoc_out/k8s_orchestrator.md ]; then \
-      cp /tmp/pdoc_out/k8s_orchestrator.md docs/api/orchestrator.md; \
+# Copiar README como página de inicio (evita depender del plugin snippets en runtime)
+RUN cp README.md docs/index.md
+
+# Generar reporte de cobertura en markdown (solo si hay tests)
+RUN TESTS=$(find . -name 'test_*.py' -o -name '*_test.py' 2>/dev/null | grep -v './docs' | head -1); \
+    if [ -n "$TESTS" ]; then \
+      python -m pytest --cov=. --cov-report=term-missing \
+        --ignore=docs --ignore=infra --ignore=k8s \
+        --tb=no -q 2>&1 | \
+        awk 'BEGIN{print "# Cobertura de Tests\n\n```text"} {print} END{print "```"}' \
+        > docs/coverage.md; \
+    else \
+      printf '# Cobertura de Tests\n\n> No se han definido tests en este proyecto todavía.\n' > docs/coverage.md; \
     fi
-
-# Generar reporte de cobertura en markdown
-RUN python -m pytest --cov=. --cov-report=term-missing \
-    --ignore=docs --ignore=infra --ignore=k8s \
-    --tb=no -q 2>&1 | \
-    awk 'BEGIN{print "# Cobertura de Tests\n\n```text"} {print} END{print "```"}' \
-    > docs/coverage.md || \
-    echo "# Cobertura de Tests\n\n> No se encontraron tests en este proyecto." > docs/coverage.md
 
 # Construir site con MkDocs
 RUN mkdocs build
