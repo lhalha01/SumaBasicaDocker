@@ -462,18 +462,5 @@ stages:
                       sed "s|__PROXY_IMAGE__|$IMAGE|g" k8s/proxy-deployment.yaml | kubectl apply -f -
                       kubectl apply -f k8s/proxy-service.yaml
 
-                      # Force-delete pods stuck in Terminating (open SSE connections can block SIGTERM)
-                      echo "Esperando 15s para terminación natural del pod anterior..."
-                      sleep 15
-                      STUCK=$(kubectl get pods -n "$(namespace)" -l app=suma-proxy \
-                        -o go-template='{{range .items}}{{if .metadata.deletionTimestamp}}{{.metadata.name}} {{end}}{{end}}' \
-                        2>/dev/null || echo "")
-                      if [ -n "$STUCK" ]; then
-                        echo "Pods atascados en Terminating: $STUCK — forzando eliminación"
-                        for POD in $STUCK; do
-                          kubectl delete pod "$POD" -n "$(namespace)" --grace-period=0 --force --ignore-not-found || true
-                        done
-                      fi
-
                       kubectl rollout status deployment/suma-proxy -n "$(namespace)" --timeout=600s
                       kubectl get deployments,services,pods -n "$(namespace)"
