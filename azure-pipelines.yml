@@ -21,6 +21,10 @@ variables:
   ghcrUser: 'lhalha01'
   namespace: 'calculadora-suma'
   terraformWorkingDir: 'infra/terraform'
+  sonarServiceConnection: 'LabsConn'
+  sonarOrganization: 'lhalha01'
+  sonarProjectKey: 'lhalha01_SumaBasicaDocker'
+  sonarProjectName: 'SumaBasicaDocker'
 
 stages:
   - stage: TerraformPlan
@@ -59,9 +63,43 @@ stages:
                   -var="existing_aks_name=$(aksClusterName)" \
                   -var="kubelet_identity_object_id=$(AKS_KUBELET_OBJECT_ID)"
 
+  - stage: CodeQuality
+    displayName: 'SonarCloud Code Quality'
+    dependsOn: TerraformPlan
+    jobs:
+      - job: SonarAnalysis
+        displayName: 'SonarCloud static analysis'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: SonarCloudPrepare@2
+            displayName: 'Prepare SonarCloud analysis'
+            inputs:
+              SonarCloud: '$(sonarServiceConnection)'
+              organization: '$(sonarOrganization)'
+              scannerMode: 'CLI'
+              configMode: 'manual'
+              cliProjectKey: '$(sonarProjectKey)'
+              cliProjectName: '$(sonarProjectName)'
+              extraProperties: |
+                sonar.sources=.
+                sonar.exclusions=**/__pycache__/**,**/trivy-reports/**,infra/**,k8s/**
+                sonar.python.version=3.11
+
+          - task: SonarCloudAnalyze@2
+            displayName: 'Run SonarCloud analysis'
+
+          - task: SonarCloudPublish@2
+            displayName: 'Publish SonarCloud results'
+            inputs:
+              pollingTimeoutSec: '300'
+
   - stage: BuildAndPush
     displayName: 'Build and Push Proxy Image'
-    dependsOn: TerraformPlan
+    dependsOn: CodeQuality
     jobs:
       - job: BuildPush
         pool:
