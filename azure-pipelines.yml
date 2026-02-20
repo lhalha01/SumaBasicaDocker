@@ -123,6 +123,139 @@ stages:
                 echo "##vso[task.setvariable variable=proxyImage;isOutput=true]$IMAGE"
             name: buildMeta
 
+  - stage: SecurityScan
+    displayName: 'Trivy Security Scan'
+    dependsOn: BuildAndPush
+    jobs:
+      - job: TrivyImageScan
+        displayName: 'Scan image with Trivy'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: AzureCLI@2
+            displayName: 'Install Trivy and pull image'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+
+                ACR_NAME="$(acrName)"
+                ACR_LOGIN_SERVER="$(acrLoginServer)"
+
+                if [ -z "$ACR_NAME" ]; then
+                  ACR_NAME=$(az acr list -g "$(resourceGroup)" --query "[0].name" -o tsv)
+                fi
+
+                if [ -z "$ACR_NAME" ]; then
+                  ACR_TOTAL=$(az acr list --query "length(@)" -o tsv)
+                  if [ "$ACR_TOTAL" = "1" ]; then
+                    ACR_NAME=$(az acr list --query "[0].name" -o tsv)
+                  elif [ "$ACR_TOTAL" = "0" ]; then
+                    echo "ERROR: No se encontró ningún ACR en la suscripción. Crea uno o define 'acrName'."
+                    exit 1
+                  else
+                    echo "ERROR: Se encontraron múltiples ACR en la suscripción y ninguno en $(resourceGroup). Define 'acrName'."
+                    az acr list --query "[].{name:name,resourceGroup:resourceGroup,loginServer:loginServer}" -o table
+                    exit 1
+                  fi
+                fi
+
+                if [ -z "$ACR_LOGIN_SERVER" ]; then
+                  ACR_LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+                fi
+
+                if [ -z "$ACR_LOGIN_SERVER" ]; then
+                  echo "ERROR: No se pudo resolver loginServer para ACR '$ACR_NAME'. Define 'acrLoginServer'."
+                  exit 1
+                fi
+
+                az acr login --name "$ACR_NAME"
+
+                TRIVY_VERSION="0.57.1"
+                curl -sfL "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -o trivy.tar.gz
+                tar -xzf trivy.tar.gz trivy
+                sudo mv trivy /usr/local/bin/trivy
+                trivy --version
+
+                IMAGE="$ACR_LOGIN_SERVER/suma-proxy:$(Build.SourceVersion)"
+                docker pull "$IMAGE"
+
+          - task: Bash@3
+            displayName: 'Generate Trivy reports (JSON/SARIF)'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
+                IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+                mkdir -p trivy-reports
+
+                trivy image \
+                  --severity "$(trivyImageFailSeverities)" \
+                  --ignore-unfixed \
+                  --exit-code 0 \
+                  --no-progress \
+                  --format json \
+                  --output trivy-reports/trivy-report.json \
+                  "$IMAGE"
+
+                trivy image \
+                  --severity "$(trivyImageFailSeverities)" \
+                  --ignore-unfixed \
+                  --exit-code 0 \
+                  --no-progress \
+                  --format sarif \
+                  --output trivy-reports/trivy-report.sarif \
+                  "$IMAGE"
+
+                trivy config \
+                  --severity "$(trivyConfigFailSeverities)" \
+                  --exit-code 0 \
+                  --no-progress \
+                  --format json \
+                  --output trivy-reports/trivy-config-report.json \
+                  k8s infra Dockerfile
+
+                trivy config \
+                  --severity "$(trivyConfigFailSeverities)" \
+                  --exit-code 0 \
+                  --no-progress \
+                  --format sarif \
+                  --output trivy-reports/trivy-config-report.sarif \
+                  k8s infra Dockerfile
+
+          - task: PublishPipelineArtifact@1
+            displayName: 'Publish Trivy reports'
+            condition: always()
+            inputs:
+              targetPath: '$(System.DefaultWorkingDirectory)/trivy-reports'
+              artifact: 'trivy-reports'
+              publishLocation: 'pipeline'
+
+          - task: Bash@3
+            displayName: 'Trivy security gate'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
+                IMAGE="$(acrLoginServer)/suma-proxy:$(Build.SourceVersion)"
+
+                trivy image \
+                  --severity "$(trivyImageFailSeverities)" \
+                  --ignore-unfixed \
+                  --exit-code 1 \
+                  --no-progress \
+                  "$IMAGE"
+
+                trivy config \
+                  --severity "$(trivyConfigFailSeverities)" \
+                  --exit-code 1 \
+                  --no-progress \
+                  k8s infra Dockerfile
+
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
     dependsOn: BuildAndPush
