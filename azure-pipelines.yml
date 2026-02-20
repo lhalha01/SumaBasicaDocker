@@ -214,7 +214,7 @@ stages:
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 0 \
-                  --no-progress \
+                  --quiet \
                   --format json \
                   --output trivy-reports/trivy-config-report.json \
                   k8s infra Dockerfile
@@ -222,7 +222,7 @@ stages:
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 0 \
-                  --no-progress \
+                  --quiet \
                   --format sarif \
                   --output trivy-reports/trivy-config-report.sarif \
                   k8s infra Dockerfile
@@ -253,7 +253,7 @@ stages:
                 trivy config \
                   --severity "$(trivyConfigFailSeverities)" \
                   --exit-code 1 \
-                  --no-progress \
+                  --quiet \
                   k8s infra Dockerfile
 
   - stage: DeployAKS
