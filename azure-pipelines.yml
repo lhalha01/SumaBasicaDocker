@@ -462,5 +462,19 @@ stages:
                       sed "s|__PROXY_IMAGE__|$IMAGE|g" k8s/proxy-deployment.yaml | kubectl apply -f -
                       kubectl apply -f k8s/proxy-service.yaml
 
-                      kubectl rollout status deployment/suma-proxy -n "$(namespace)" --timeout=600s
+                      kubectl rollout status deployment/suma-proxy -n "$(namespace)" --timeout=600s || {
+                        echo ""
+                        echo "========== ROLLOUT FAILED — DIAGNOSTICS =========="
+                        echo "--- Deployment state ---"
+                        kubectl describe deployment suma-proxy -n "$(namespace)"
+                        echo "--- Pods ---"
+                        kubectl get pods -n "$(namespace)" -l app=suma-proxy -o wide
+                        echo "--- Pod events & state ---"
+                        kubectl describe pods -n "$(namespace)" -l app=suma-proxy
+                        echo "--- Pod logs (last 80 lines) ---"
+                        kubectl logs -n "$(namespace)" -l app=suma-proxy --tail=80 --previous 2>/dev/null || \
+                        kubectl logs -n "$(namespace)" -l app=suma-proxy --tail=80 2>/dev/null || true
+                        echo "=================================================="
+                        exit 1
+                      }
                       kubectl get deployments,services,pods -n "$(namespace)"
