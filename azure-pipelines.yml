@@ -1,12 +1,12 @@
 trigger:
   branches:
     include:
-      - FrontalSuma
+      - main
 
 pr:
   branches:
     include:
-      - FrontalSuma
+      - main
 
 variables:
   azureServiceConnection: 'LabsConn'

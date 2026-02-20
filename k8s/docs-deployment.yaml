@@ -1,0 +1,69 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: suma-docs
+  namespace: calculadora-suma
+  labels:
+    app: suma-docs
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: suma-docs
+  template:
+    metadata:
+      labels:
+        app: suma-docs
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: suma-docs
+          image: __DOCS_IMAGE__
+          ports:
+            - containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "100m"
+              memory: "128Mi"
+          volumeMounts:
+            - name: nginx-cache
+              mountPath: /var/cache/nginx
+            - name: nginx-run
+              mountPath: /var/run
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: nginx-cache
+          emptyDir: {}
+        - name: nginx-run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: suma-docs
+  namespace: calculadora-suma
+  labels:
+    app: suma-docs
+spec:
+  type: LoadBalancer
+  selector:
+    app: suma-docs
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

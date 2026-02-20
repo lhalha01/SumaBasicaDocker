@@ -2,6 +2,8 @@ from flask import Flask, request, jsonify, make_response, send_from_directory, R
 from flask_cors import CORS
 import requests
 import os
+import signal
+import subprocess
 import time
 import json
 import threading
@@ -10,6 +12,14 @@ from k8s_orchestrator import K8sOrchestrator
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+
+# Shutdown flag — set by SIGTERM so SSE streams exit cleanly
+_shutdown = threading.Event()
+
+def _handle_sigterm(signum, frame):
+    _shutdown.set()
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 MAX_DIGITOS = 4  # Soporta hasta 9999
 AUTO_SCALE_DOWN = True
@@ -99,7 +109,7 @@ def index():
 def terminal_stream():
     def event_stream():
         last_index = 0
-        while True:
+        while not _shutdown.is_set():
             try:
                 with terminal_log_lock:
                     logs_snapshot = list(terminal_log_buffer)
@@ -130,6 +140,25 @@ def terminal_clear():
     with terminal_log_lock:
         terminal_log_buffer.clear()
     return jsonify({'ok': True})
+
+@app.route('/docs-url')
+def docs_url():
+    """Devuelve la URL pública del servicio de documentación (suma-docs LoadBalancer)."""
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "get", "svc", "suma-docs",
+                "-n", NAMESPACE,
+                "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"
+            ],
+            capture_output=True, text=True, timeout=5
+        )
+        ip = result.stdout.strip()
+        if ip:
+            return jsonify({'url': f'http://{ip}', 'status': 'ok'})
+        return jsonify({'url': None, 'status': 'pending'})
+    except Exception as e:
+        return jsonify({'url': None, 'status': 'error', 'detail': str(e)})
 
 @app.route('/<path:path>')
 def serve_static(path):
