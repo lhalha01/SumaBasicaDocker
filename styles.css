@@ -4,6 +4,41 @@
     box-sizing: border-box;
 }
 
+/* ── Docs badge ─────────────────────────────────────────────── */
+.docs-badge {
+    position: fixed;
+    top: 18px;
+    right: 22px;
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #009688 0%, #00796b 100%);
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 22px;
+    box-shadow: 0 4px 14px rgba(0, 150, 136, 0.45);
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.docs-badge:hover {
+    background: linear-gradient(135deg, #00bfa5 0%, #009688 100%);
+    box-shadow: 0 6px 20px rgba(0, 150, 136, 0.6);
+    transform: translateY(-2px);
+}
+
+.docs-badge.docs-pending {
+    background: linear-gradient(135deg, #78909c 0%, #546e7a 100%);
+    box-shadow: 0 4px 14px rgba(84, 110, 122, 0.4);
+    pointer-events: none;
+    opacity: 0.75;
+}
+/* ─────────────────────────────────────────────────────────── */
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

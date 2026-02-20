@@ -131,6 +131,25 @@ def terminal_clear():
         terminal_log_buffer.clear()
     return jsonify({'ok': True})
 
+@app.route('/docs-url')
+def docs_url():
+    """Devuelve la URL pública del servicio de documentación (suma-docs LoadBalancer)."""
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "get", "svc", "suma-docs",
+                "-n", NAMESPACE,
+                "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"
+            ],
+            capture_output=True, text=True, timeout=5
+        )
+        ip = result.stdout.strip()
+        if ip:
+            return jsonify({'url': f'http://{ip}', 'status': 'ok'})
+        return jsonify({'url': None, 'status': 'pending'})
+    except Exception as e:
+        return jsonify({'url': None, 'status': 'error', 'detail': str(e)})
+
 @app.route('/<path:path>')
 def serve_static(path):
     if os.path.exists(path):

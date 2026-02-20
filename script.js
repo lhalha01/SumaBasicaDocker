@@ -1,5 +1,30 @@
 let autoScrollEnabled = true;
 let terminalEventSource = null;
+
+// ── Docs link auto-resolve ───────────────────────────────────
+async function resolveDocsLink() {
+    const link = document.getElementById('docs-link');
+    if (!link) return;
+
+    try {
+        const res = await fetch('/docs-url');
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (data.url) {
+            link.href = data.url;
+            link.classList.remove('docs-pending');
+        } else {
+            link.classList.add('docs-pending');
+            link.title = 'Documentación no disponible aún (LoadBalancer pendiente)';
+        }
+    } catch (_) {
+        link.classList.add('docs-pending');
+        link.title = 'No se pudo resolver la URL de documentación';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', resolveDocsLink);
+// ────────────────────────────────────────────────────────────
 let terminalStreamConnected = false;
 let terminalStatusState = 'connecting';
 
