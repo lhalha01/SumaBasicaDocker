@@ -30,13 +30,20 @@ RUN if [ -f /tmp/pdoc_out/proxy.md ]; then \
       cp /tmp/pdoc_out/k8s_orchestrator.md docs/api/orchestrator.md; \
     fi
 
-# Generar reporte de cobertura en markdown
-RUN python -m pytest --cov=. --cov-report=term-missing \
-    --ignore=docs --ignore=infra --ignore=k8s \
-    --tb=no -q 2>&1 | \
-    awk 'BEGIN{print "# Cobertura de Tests\n\n```text"} {print} END{print "```"}' \
-    > docs/coverage.md || \
-    echo "# Cobertura de Tests\n\n> No se encontraron tests en este proyecto." > docs/coverage.md
+# Copiar README como página de inicio (evita depender del plugin snippets en runtime)
+RUN cp README.md docs/index.md
+
+# Generar reporte de cobertura en markdown (solo si hay tests)
+RUN TESTS=$(find . -name 'test_*.py' -o -name '*_test.py' 2>/dev/null | grep -v './docs' | head -1); \
+    if [ -n "$TESTS" ]; then \
+      python -m pytest --cov=. --cov-report=term-missing \
+        --ignore=docs --ignore=infra --ignore=k8s \
+        --tb=no -q 2>&1 | \
+        awk 'BEGIN{print "# Cobertura de Tests\n\n```text"} {print} END{print "```"}' \
+        > docs/coverage.md; \
+    else \
+      printf '# Cobertura de Tests\n\n> No se han definido tests en este proyecto todavía.\n' > docs/coverage.md; \
+    fi
 
 # Construir site con MkDocs
 RUN mkdocs build
