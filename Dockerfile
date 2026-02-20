@@ -15,7 +15,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 
 COPY proxy.py k8s_orchestrator.py index.html script.js styles.css ./
 RUN addgroup --system appgroup \
-    && adduser --system --ingroup appgroup --home /app appuser \
+    && adduser --system --uid 1000 --ingroup appgroup --home /app appuser \
     && chown -R appuser:appgroup /app
 
 ENV K8S_NAMESPACE=calculadora-suma
