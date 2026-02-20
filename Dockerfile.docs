@@ -49,4 +49,7 @@ FROM nginx:alpine
 COPY --from=builder /app/site /usr/share/nginx/html
 COPY nginx-docs.conf /etc/nginx/conf.d/default.conf
 
-EXPOSE 80
+# Run as non-root nginx user (uid 101) — satisfies AVD-DS-0002
+USER nginx
+
+EXPOSE 8080
