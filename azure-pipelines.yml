@@ -109,7 +109,7 @@ stages:
             env:
               SONAR_TOKEN: $(SONAR_TOKEN)
               SONAR_PROJECT_KEY: $(sonarProjectKey)
-              SLACK_WEBHOOK_URL: $(slackWebhookUrl)
+              SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
               BUILD_BUILDID: $(Build.BuildId)
             inputs:
               targetType: 'inline'
