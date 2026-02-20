@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, make_response, send_from_directory, R
 from flask_cors import CORS
 import requests
 import os
+import signal
 import subprocess
 import time
 import json
@@ -11,6 +12,14 @@ from k8s_orchestrator import K8sOrchestrator
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+
+# Shutdown flag — set by SIGTERM so SSE streams exit cleanly
+_shutdown = threading.Event()
+
+def _handle_sigterm(signum, frame):
+    _shutdown.set()
+
+signal.signal(signal.SIGTERM, _handle_sigterm)
 
 MAX_DIGITOS = 4  # Soporta hasta 9999
 AUTO_SCALE_DOWN = True
@@ -100,7 +109,7 @@ def index():
 def terminal_stream():
     def event_stream():
         last_index = 0
-        while True:
+        while not _shutdown.is_set():
             try:
                 with terminal_log_lock:
                     logs_snapshot = list(terminal_log_buffer)
