@@ -14,6 +14,7 @@ Calculadora distribuida que descompone una suma de hasta 4 dígitos en operacion
 - [Variables de entorno](#variables-de-entorno)
 - [Ejecución local](#ejecución-local)
 - [Despliegue en AKS](#despliegue-en-aks)
+- [Documentación](#documentación)
 - [Seguridad](#seguridad)
 - [Calidad de código](#calidad-de-código)
 
@@ -29,6 +30,7 @@ graph TB
 
     subgraph AKS - namespace: calculadora-suma
         P[suma-proxy<br/>Flask · puerto 8080]
+        DOCS[suma-docs<br/>nginx · MkDocs site]
 
         subgraph Backend Pods dinámicos
             D0[suma-digito-0<br/>puerto 8000]
@@ -46,12 +48,14 @@ graph TB
 
     B -- "POST /suma-n-digitos" --> P
     B -- "GET /terminal-stream (SSE)" --> P
+    B -- "GET /docs (badge link)" --> DOCS
     P -- "kubectl scale + port-forward" --> AKS_CTRL
     P -- "HTTP POST /suma" --> D0
     P -- "HTTP POST /suma" --> D1
     P -- "HTTP POST /suma" --> D2
     P -- "HTTP POST /suma" --> D3
-    ACR -- imagen --> P
+    ACR -- imagen proxy --> P
+    ACR -- imagen docs --> DOCS
 ```
 
 ---
@@ -63,17 +67,29 @@ SumaBasicaDocker/
 ├── proxy.py                  # Servidor Flask principal (orquestador + API)
 ├── k8s_orchestrator.py       # Clase que interactúa con kubectl
 ├── index.html                # UI de la calculadora
-├── script.js                 # Lógica frontend
+├── script.js                 # Lógica frontend (incluye badge de docs)
 ├── styles.css                # Estilos
 ├── requirements.txt          # Dependencias Python
 ├── Dockerfile                # Imagen Docker del proxy
-├── azure-pipelines.yml       # Pipeline CI/CD completa
+├── Dockerfile.docs           # Imagen Docker del site de documentación (MkDocs + nginx)
+├── nginx-docs.conf           # Configuración nginx para el site de docs (puerto 8080)
+├── mkdocs.yml                # Configuración MkDocs Material
+├── cliff.toml                # Configuración git-cliff para changelog automático
+├── azure-pipelines.yml       # Pipeline CI/CD completa (6 stages)
+├── docs/
+│   ├── index.md              # Página de inicio (copia de README.md, generada en CI)
+│   ├── changelog.md          # Changelog automático (generado por git-cliff en CI)
+│   ├── coverage.md           # Cobertura de tests (generada por pytest-cov en CI)
+│   └── api/
+│       ├── proxy.md          # API Reference de proxy.py (generada por pdoc en CI)
+│       └── orchestrator.md   # API Reference de k8s_orchestrator.py (generada por pdoc en CI)
 ├── k8s/
 │   ├── namespace.yaml            # Namespace calculadora-suma
 │   ├── backend-workloads.yaml    # 4 Deployments + 4 Services (suma-digito-0..3)
-│   ├── proxy-deployment.yaml     # Deployment del proxy
+│   ├── proxy-deployment.yaml     # Deployment del proxy (strategy: Recreate)
 │   ├── proxy-service.yaml        # Service LoadBalancer del proxy
 │   ├── proxy-rbac.yaml           # ServiceAccount + ClusterRoleBinding
+│   ├── docs-deployment.yaml      # Deployment + Service LoadBalancer del site de docs
 │   └── ghcr-secret-example.yaml  # Ejemplo de secret para GHCR
 └── infra/
     └── terraform/
@@ -112,6 +128,20 @@ Clase `K8sOrchestrator` que abstrae las operaciones `kubectl`:
 | `liberar_recursos()` | Termina procesos port-forward activos |
 
 > En modo `ORCHESTRATOR_IN_CLUSTER=true` (AKS) no usa port-forward sino DNS interno del cluster.
+
+### Frontend — `index.html` + `script.js` + `styles.css`
+
+Single-page app que presenta la calculadora. Incluye un **badge flotante** (📚 Documentación) que obtiene dinámicamente la URL del LoadBalancer de `suma-docs` llamando a `GET /docs-url` en el proxy, y redirige al usuario al site de documentación.
+
+### `suma-docs` — Site de documentación
+
+Nginx (alpine) sirviendo el site estático generado por MkDocs Material. Se construye con `Dockerfile.docs` durante la stage `DocsGenerate` de la pipeline:
+
+1. `git-cliff` genera `docs/changelog.md` a partir de commits convencionales
+2. `pdoc` genera `docs/api/proxy.md` y `docs/api/orchestrator.md` con las docstrings
+3. `pytest --cov` genera `docs/coverage.md` (o placeholder si no hay tests)
+4. `mkdocs build` compila el site estático a `/app/site`
+5. La imagen final copia `/app/site` a nginx y expone el puerto `8080`
 
 ### Backend microservicios (`suma-digito-0..3`)
 
@@ -158,13 +188,15 @@ flowchart LR
     A([TerraformPlan]) --> B([CodeQuality])
     B --> C([BuildAndPush])
     C --> D([SecurityScan])
-    D --> E([DeployAKS])
+    D --> E([DocsGenerate])
+    E --> F([DeployAKS])
 
     style A fill:#4a90d9,color:#fff
     style B fill:#7b68ee,color:#fff
     style C fill:#5cb85c,color:#fff
     style D fill:#f0ad4e,color:#fff
-    style E fill:#d9534f,color:#fff
+    style E fill:#17a2b8,color:#fff
+    style F fill:#d9534f,color:#fff
 ```
 
 | Stage | Descripción |
@@ -173,7 +205,8 @@ flowchart LR
 | **CodeQuality** | Análisis estático con SonarCloud Scanner CLI 6.2.1 |
 | **BuildAndPush** | `docker build` + push a ACR (`acrsuma.azurecr.io/suma-proxy`) |
 | **SecurityScan** | Trivy: escaneo de CVEs en imagen + misconfiguraciones en IaC |
-| **DeployAKS** | `kubectl apply` de todos los manifiestos K8s en AKS |
+| **DocsGenerate** | git-cliff + pdoc + pytest-cov + MkDocs build + push imagen docs a ACR + deploy `suma-docs` en AKS |
+| **DeployAKS** | `kubectl apply` de todos los manifiestos K8s en AKS (rollout timeout 600 s) |
 
 ### Variables de la pipeline
 
@@ -187,6 +220,7 @@ flowchart LR
 | `SONAR_TOKEN` | — | **Secreta** |
 | `ghcrPat` | — | **Secreta** (o Key Vault) |
 | `AKS_KUBELET_OBJECT_ID` | — | Secreta |
+| `docsImageTag` | `$(Build.BuildId)` | Pública |
 
 ---
 
@@ -261,14 +295,43 @@ kubectl apply -f k8s/proxy-service.yaml
 
 ---
 
+## Documentación
+
+El proyecto implementa **Docs as Code**: la documentación se genera automáticamente en cada pipeline y se despliega como un servicio independiente en AKS.
+
+| Herramienta | Fuente | Salida |
+|---|---|---|
+| [MkDocs Material](https://squidfunk.github.io/mkdocs-material/) | `docs/*.md` | Site HTML estático |
+| [pdoc](https://pdoc.dev) | Docstrings de `proxy.py` y `k8s_orchestrator.py` | `docs/api/proxy.md`, `docs/api/orchestrator.md` |
+| [git-cliff](https://github.com/orhun/git-cliff) | Commits convencionales | `docs/changelog.md` |
+| [pytest-cov](https://pytest-cov.readthedocs.io) | Tests del proyecto | `docs/coverage.md` |
+
+```mermaid
+graph LR
+    GC[git-cliff] --> CL[changelog.md]
+    PD[pdoc] --> API[api/proxy.md<br/>api/orchestrator.md]
+    PT[pytest-cov] --> CV[coverage.md]
+    RM[README.md] --> IX[index.md]
+    CL & API & CV & IX --> MK[mkdocs build]
+    MK --> IMG[Docker image<br/>acrsuma.azurecr.io/suma-docs]
+    IMG --> K8S[suma-docs pod<br/>nginx:alpine :8080]
+    K8S --> LB[LoadBalancer IP]
+    LB --> FE[Frontend badge 📚]
+```
+
+---
+
 ## Seguridad
 
 ### Hardening aplicado
 
-- **Imagen Docker**: usuario no-root `appuser`, `kubectl` pinned a `v1.25.7`
-- **Pods K8s**: `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: ALL`, `runAsNonRoot: true`, `seccompProfile: RuntimeDefault`
+- **Imagen proxy** (`Dockerfile`): usuario no-root `appuser` (uid 1000), `kubectl` pinned a `v1.25.7`
+- **Imagen docs** (`Dockerfile.docs`): usuario `nginx` (uid 101), multi-stage build (no herramientas de build en imagen final)
+- **Pods proxy/backends**: `runAsNonRoot: true`, `runAsUser: 1000`, `runAsGroup: 1000`, `readOnlyRootFilesystem: true`, `allowPrivilegeEscalation: false`, `capabilities.drop: ALL`, `seccompProfile: RuntimeDefault`
+- **Pod suma-docs**: `runAsNonRoot: true`, `runAsUser: 101`, `readOnlyRootFilesystem: true` + emptyDir para `/var/cache/nginx`, `/var/run`, `/tmp`
 - **Trivy**: escaneo de CVEs (gate en `CRITICAL`) + misconfiguraciones IaC (gate en `HIGH,CRITICAL`)
 - **CVEs parchados**: `flask-cors 4.0.2`, `jaraco.context 6.1.0`, `wheel 0.46.2`
+- **Deployment proxy**: `strategy: Recreate` (evita solapamiento de pods Terminating), `progressDeadlineSeconds: 900`
 
 ### Diagrama de seguridad por capa
 
@@ -310,4 +373,4 @@ El proyecto usa [SonarCloud](https://sonarcloud.io/project/overview?id=lhalha01_
 
 ---
 
-*Rama activa: `FrontalSuma` | Cluster: `KSuma` | Resource Group: `AHL_resources`*
+*Cluster: `KSuma` | Resource Group: `AHL_resources` | ACR: `acrsuma.azurecr.io` | Namespace K8s: `calculadora-suma`*
