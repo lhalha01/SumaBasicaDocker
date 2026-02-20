@@ -14,6 +14,8 @@ variables:
   aksClusterName: 'KSuma'
   acrName: 'acrsuma'
   acrLoginServer: 'acrsuma.azurecr.io'
+  trivyImageFailSeverities: 'CRITICAL'
+  trivyConfigFailSeverities: 'HIGH,CRITICAL'
   ghcrPat: ''
   keyVaultName: 'AHLSecretos'
   ghcrUser: 'lhalha01'
@@ -264,7 +266,7 @@ stages:
 
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
-    dependsOn: BuildAndPush
+    dependsOn: SecurityScan
     jobs:
       - deployment: Deploy
         environment: 'aks-frontal'

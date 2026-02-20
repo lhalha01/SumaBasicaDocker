@@ -16,10 +16,20 @@ spec:
         app: suma-proxy
     spec:
       serviceAccountName: suma-proxy
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: suma-proxy
           image: __PROXY_IMAGE__
           imagePullPolicy: Always
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
           ports:
             - containerPort: 8080
           env:
@@ -31,6 +41,9 @@ spec:
               value: "true"
             - name: BACKEND_SERVICE_PORT
               value: "8000"
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
           resources:
             requests:
               cpu: "100m"
@@ -38,3 +51,6 @@ spec:
             limits:
               cpu: "300m"
               memory: "256Mi"
+      volumes:
+        - name: tmp
+          emptyDir: {}
