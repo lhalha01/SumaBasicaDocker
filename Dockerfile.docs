@@ -17,18 +17,11 @@ RUN pip install --no-cache-dir \
 # Copiar código fuente y documentación
 COPY . .
 
-# Generar API Reference con pdoc en formato markdown
-RUN pdoc proxy.py k8s_orchestrator.py \
-    --output-dir /tmp/pdoc_out \
-    --format markdown 2>/dev/null || true
-
-# Copiar docs generadas por pdoc si se crearon correctamente
-RUN if [ -f /tmp/pdoc_out/proxy.md ]; then \
-      cp /tmp/pdoc_out/proxy.md docs/api/proxy.md; \
-    fi && \
-    if [ -f /tmp/pdoc_out/k8s_orchestrator.md ]; then \
-      cp /tmp/pdoc_out/k8s_orchestrator.md docs/api/orchestrator.md; \
-    fi
+# Generar API Reference con pdoc (stdout → markdown file)
+RUN pdoc proxy --format markdown > docs/api/proxy.md 2>/dev/null || \
+    echo "# proxy.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/proxy.md
+RUN pdoc k8s_orchestrator --format markdown > docs/api/orchestrator.md 2>/dev/null || \
+    echo "# k8s_orchestrator.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/orchestrator.md
 
 # Copiar README como página de inicio (evita depender del plugin snippets en runtime)
 RUN cp README.md docs/index.md
