@@ -21,7 +21,6 @@ variables:
   ghcrUser: 'lhalha01'
   namespace: 'calculadora-suma'
   terraformWorkingDir: 'infra/terraform'
-  sonarServiceConnection: 'LabsConn'
   sonarOrganization: 'lhalha01'
   sonarProjectKey: 'lhalha01_SumaBasicaDocker'
   sonarProjectName: 'SumaBasicaDocker'
@@ -75,27 +74,31 @@ stages:
           - checkout: self
             fetchDepth: 0
 
-          - task: SonarCloudPrepare@1
-            displayName: 'Prepare SonarCloud analysis'
+          - task: Bash@3
+            displayName: 'Run SonarCloud analysis (CLI)'
+            env:
+              SONAR_TOKEN: $(SONAR_TOKEN)
             inputs:
-              SonarCloud: '$(sonarServiceConnection)'
-              organization: '$(sonarOrganization)'
-              scannerMode: 'CLI'
-              configMode: 'manual'
-              cliProjectKey: '$(sonarProjectKey)'
-              cliProjectName: '$(sonarProjectName)'
-              extraProperties: |
-                sonar.sources=.
-                sonar.exclusions=**/__pycache__/**,**/trivy-reports/**,infra/**,k8s/**
-                sonar.python.version=3.11
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
 
-          - task: SonarCloudAnalyze@1
-            displayName: 'Run SonarCloud analysis'
+                SCANNER_VERSION="6.2.1.4610"
+                curl -fsSL -o sonar-scanner.zip \
+                  "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SCANNER_VERSION}-linux-x64.zip"
+                unzip -q sonar-scanner.zip
+                export PATH="$PWD/sonar-scanner-${SCANNER_VERSION}-linux-x64/bin:$PATH"
 
-          - task: SonarCloudPublish@1
-            displayName: 'Publish SonarCloud results'
-            inputs:
-              pollingTimeoutSec: '300'
+                sonar-scanner \
+                  -Dsonar.host.url=https://sonarcloud.io \
+                  -Dsonar.token="$SONAR_TOKEN" \
+                  -Dsonar.organization="$(sonarOrganization)" \
+                  -Dsonar.projectKey="$(sonarProjectKey)" \
+                  -Dsonar.projectName="$(sonarProjectName)" \
+                  -Dsonar.sources=. \
+                  -Dsonar.exclusions="**/__pycache__/**,**/trivy-reports/**,infra/**,k8s/**" \
+                  -Dsonar.python.version=3.11 \
+                  -Dsonar.qualitygate.wait=true
 
   - stage: BuildAndPush
     displayName: 'Build and Push Proxy Image'
