@@ -58,5 +58,6 @@ nav:
   - API Reference:
     - proxy.py: api/proxy.md
     - k8s_orchestrator.py: api/orchestrator.md
+  - Calidad de Código: sonarcloud.md
   - Changelog: changelog.md
   - Cobertura de Tests: coverage.md
