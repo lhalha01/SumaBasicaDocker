@@ -307,9 +307,74 @@ stages:
                   --quiet \
                   .
 
+  - stage: DocsGenerate
+    displayName: 'Docs as Code — Build & Deploy'
+    dependsOn: SecurityScan
+    jobs:
+      - job: BuildDocs
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 0
+
+          - task: AzureCLI@2
+            displayName: 'Generate changelog, build & push docs image, deploy to AKS'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+
+                ACR_NAME="$(acrName)"
+                ACR_LOGIN_SERVER="$(acrLoginServer)"
+
+                if [ -z "$ACR_NAME" ]; then
+                  ACR_NAME=$(az acr list -g "$(resourceGroup)" --query "[0].name" -o tsv)
+                fi
+                if [ -z "$ACR_LOGIN_SERVER" ]; then
+                  ACR_LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
+                fi
+
+                # ── git-cliff: generar changelog ──────────────────────────────
+                CLIFF_VERSION="2.4.0"
+                curl -fsSL "https://github.com/orhun/git-cliff/releases/download/v${CLIFF_VERSION}/git-cliff-${CLIFF_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
+                  | tar -xz --wildcards "*/git-cliff" --strip-components=1
+                sudo mv git-cliff /usr/local/bin/git-cliff
+                git-cliff --config cliff.toml --output docs/changelog.md || true
+
+                # ── Build docs image ──────────────────────────────────────────
+                DOCS_IMAGE="$ACR_LOGIN_SERVER/suma-docs:$(Build.BuildId)"
+
+                az acr login --name "$ACR_NAME"
+                docker build -f Dockerfile.docs \
+                  -t "$DOCS_IMAGE" \
+                  -t "$ACR_LOGIN_SERVER/suma-docs:latest" \
+                  .
+                docker push "$DOCS_IMAGE"
+                docker push "$ACR_LOGIN_SERVER/suma-docs:latest"
+
+                # ── Deploy to AKS ─────────────────────────────────────────────
+                az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
+
+                sed "s|__DOCS_IMAGE__|$DOCS_IMAGE|g" k8s/docs-deployment.yaml | kubectl apply -f -
+                kubectl set image deployment/suma-docs \
+                  suma-docs="$DOCS_IMAGE" \
+                  -n "$(namespace)" || true
+                kubectl rollout status deployment/suma-docs \
+                  -n "$(namespace)" --timeout=120s
+
+                echo "───────────────────────────────────────────"
+                echo "Docs IP pública:"
+                kubectl get svc suma-docs -n "$(namespace)" \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
+                echo ""
+                echo "───────────────────────────────────────────"
+
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
-    dependsOn: SecurityScan
+    dependsOn: DocsGenerate
     jobs:
       - deployment: Deploy
         environment: 'aks-frontal'

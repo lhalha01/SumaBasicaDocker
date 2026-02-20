@@ -1,0 +1,52 @@
+FROM python:3.11-slim AS builder
+
+WORKDIR /app
+
+# Instalar dependencias de documentación
+RUN pip install --no-cache-dir \
+    mkdocs-material \
+    mkdocs-mermaid2-plugin \
+    mkdocs-include-markdown-plugin \
+    pdoc \
+    pytest \
+    pytest-cov \
+    flask \
+    flask-cors \
+    requests
+
+# Copiar código fuente y documentación
+COPY . .
+
+# Generar API Reference con pdoc en formato markdown
+RUN pdoc proxy.py k8s_orchestrator.py \
+    --output-dir /tmp/pdoc_out \
+    --format markdown 2>/dev/null || true
+
+# Copiar docs generadas por pdoc si se crearon correctamente
+RUN if [ -f /tmp/pdoc_out/proxy.md ]; then \
+      cp /tmp/pdoc_out/proxy.md docs/api/proxy.md; \
+    fi && \
+    if [ -f /tmp/pdoc_out/k8s_orchestrator.md ]; then \
+      cp /tmp/pdoc_out/k8s_orchestrator.md docs/api/orchestrator.md; \
+    fi
+
+# Generar reporte de cobertura en markdown
+RUN python -m pytest --cov=. --cov-report=term-missing \
+    --ignore=docs --ignore=infra --ignore=k8s \
+    --tb=no -q 2>&1 | \
+    awk 'BEGIN{print "# Cobertura de Tests\n\n```text"} {print} END{print "```"}' \
+    > docs/coverage.md || \
+    echo "# Cobertura de Tests\n\n> No se encontraron tests en este proyecto." > docs/coverage.md
+
+# Construir site con MkDocs
+RUN mkdocs build
+
+# ─────────────────────────────────────────
+# Imagen final: nginx sirviendo el site
+# ─────────────────────────────────────────
+FROM nginx:alpine
+
+COPY --from=builder /app/site /usr/share/nginx/html
+COPY nginx-docs.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
