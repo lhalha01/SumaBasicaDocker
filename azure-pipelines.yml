@@ -75,7 +75,7 @@ stages:
           - checkout: self
             fetchDepth: 0
 
-          - task: SonarCloudPrepare@2
+          - task: SonarCloudPrepare@1
             displayName: 'Prepare SonarCloud analysis'
             inputs:
               SonarCloud: '$(sonarServiceConnection)'
@@ -89,10 +89,10 @@ stages:
                 sonar.exclusions=**/__pycache__/**,**/trivy-reports/**,infra/**,k8s/**
                 sonar.python.version=3.11
 
-          - task: SonarCloudAnalyze@2
+          - task: SonarCloudAnalyze@1
             displayName: 'Run SonarCloud analysis'
 
-          - task: SonarCloudPublish@2
+          - task: SonarCloudPublish@1
             displayName: 'Publish SonarCloud results'
             inputs:
               pollingTimeoutSec: '300'
