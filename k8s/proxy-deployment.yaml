@@ -16,6 +16,7 @@ spec:
         app: suma-proxy
     spec:
       serviceAccountName: suma-proxy
+      terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true
         seccompProfile:
@@ -32,6 +33,10 @@ spec:
                 - ALL
           ports:
             - containerPort: 8080
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 5"]
           env:
             - name: K8S_NAMESPACE
               valueFrom:
