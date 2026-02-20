@@ -388,4 +388,4 @@ if __name__ == '__main__':
     registrar_terminal("=" * 60, 'info')
     registrar_terminal("Servidor corriendo en http://localhost:8080", 'success')
     registrar_terminal("=" * 60, 'info')
-    app.run(host='0.0.0.0', port=8080, debug=True, use_reloader=False, threaded=True)
+    app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False, threaded=True)
