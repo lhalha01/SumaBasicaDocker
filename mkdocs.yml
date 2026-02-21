@@ -24,6 +24,8 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
+    - navigation.indexes
+    - toc.integrate
     - search.highlight
     - content.code.copy
   icon:
@@ -54,7 +56,6 @@ markdown_extensions:
       permalink: true
 
 nav:
-  - Inicio: index.md
   - API Reference:
     - proxy.py: api/proxy.md
     - k8s_orchestrator.py: api/orchestrator.md
