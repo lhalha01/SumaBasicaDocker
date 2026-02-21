@@ -24,8 +24,6 @@ theme:
     - navigation.tabs
     - navigation.sections
     - navigation.top
-    - navigation.indexes
-    - toc.integrate
     - search.highlight
     - content.code.copy
   icon:
