@@ -1,10 +1,17 @@
-/* Hide left navigation sidebar — two-column layout: content + TOC only */
+/* Hide left navigation sidebar */
 .md-sidebar--primary {
   display: none;
 }
 
-/* Expand content area to fill the space left by hidden sidebar */
+/* Move TOC sidebar to the left */
+.md-sidebar--secondary {
+  order: -1;
+  left: 0;
+  right: auto;
+}
+
+/* Expand content area and push it to the right of the TOC */
 .md-content {
-  margin-left: 0 !important;
-  max-width: 100%;
+  margin-left: 12.1rem;
+  margin-right: 0 !important;
 }
