@@ -163,6 +163,25 @@ def docs_url():
     except Exception as e:
         return jsonify({'url': None, 'status': 'error', 'detail': str(e)})
 
+@app.route('/grafana-url')
+def grafana_url():
+    """Devuelve la URL pública de Grafana (kube-prometheus-stack LoadBalancer en namespace monitoring)."""
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "get", "svc", "kube-prometheus-stack-grafana",
+                "-n", "monitoring",
+                "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"
+            ],
+            capture_output=True, text=True, timeout=5
+        )
+        ip = result.stdout.strip()
+        if ip:
+            return jsonify({'url': f'http://{ip}', 'status': 'ok'})
+        return jsonify({'url': None, 'status': 'pending'})
+    except Exception as e:
+        return jsonify({'url': None, 'status': 'error', 'detail': str(e)})
+
 @app.route('/<path:path>')
 def serve_static(path):
     if os.path.exists(path):
