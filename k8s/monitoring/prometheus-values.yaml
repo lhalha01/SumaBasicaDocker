@@ -44,7 +44,6 @@ grafana:
                   "orientation": "vertical",
                   "barWidth": 0.6,
                   "groupWidth": 0.7,
-                  "xField": "pods",
                   "legend": { "displayMode": "list", "placement": "bottom" },
                   "tooltip": { "mode": "single" }
                 },
@@ -53,14 +52,14 @@ grafana:
                     "color": { "mode": "palette-classic" },
                     "custom": { "lineWidth": 1, "fillOpacity": 80 },
                     "unit": "short",
-                    "displayName": "Operaciones"
+                    "decimals": 0
                   }
                 },
                 "targets": [
                   {
                     "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "sum by (pods) (increase(suma_operaciones_total[24h]))",
-                    "legendFormat": "{{pods}} pod(s)",
+                    "legendFormat": "{{pods}} pods",
                     "instant": true,
                     "refId": "A"
                   }
