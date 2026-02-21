@@ -117,6 +117,102 @@ grafana:
                     "refId": "A"
                   }
                 ]
+              },
+              {
+                "id": 4,
+                "type": "gauge",
+                "title": "R\u00e9plicas activas de suma-proxy",
+                "gridPos": { "x": 6, "y": 9, "w": 6, "h": 4 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "reduceOptions": { "calcs": ["lastNotNull"] },
+                  "showThresholdLabels": false,
+                  "showThresholdMarkers": true
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "unit": "short",
+                    "min": 0,
+                    "max": 4,
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "blue", "value": null },
+                        { "color": "green", "value": 1 },
+                        { "color": "yellow", "value": 3 },
+                        { "color": "red", "value": 4 }
+                      ]
+                    }
+                  }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "kube_deployment_status_replicas_available{deployment=\"suma-proxy\", namespace=\"calculadora-suma\"}",
+                    "legendFormat": "R\u00e9plicas",
+                    "instant": true,
+                    "refId": "A"
+                  }
+                ]
+              },
+              {
+                "id": 5,
+                "type": "timeseries",
+                "title": "Latencia media por endpoint (ms)",
+                "gridPos": { "x": 0, "y": 13, "w": 16, "h": 8 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "legend": { "displayMode": "list", "placement": "bottom" },
+                  "tooltip": { "mode": "multi" }
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "unit": "ms",
+                    "custom": { "lineWidth": 2, "fillOpacity": 8 }
+                  }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "1000 * rate(flask_http_request_duration_seconds_sum{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m]) / rate(flask_http_request_duration_seconds_count{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m])",
+                    "legendFormat": "{{path}}",
+                    "refId": "A"
+                  }
+                ]
+              },
+              {
+                "id": 6,
+                "type": "timeseries",
+                "title": "Errores HTTP 5xx (tasa por segundo)",
+                "gridPos": { "x": 16, "y": 13, "w": 8, "h": 8 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "legend": { "displayMode": "list", "placement": "bottom" },
+                  "tooltip": { "mode": "multi" }
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": { "fixedColor": "red", "mode": "fixed" },
+                    "unit": "reqps",
+                    "custom": { "lineWidth": 2, "fillOpacity": 20 },
+                    "thresholds": {
+                      "mode": "absolute",
+                      "steps": [
+                        { "color": "green", "value": null },
+                        { "color": "red", "value": 0.01 }
+                      ]
+                    }
+                  }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "sum(rate(flask_http_request_total{status=~\"5..\"}[5m]))",
+                    "legendFormat": "5xx req/s",
+                    "refId": "A"
+                  }
+                ]
               }
             ],
             "templating": {
