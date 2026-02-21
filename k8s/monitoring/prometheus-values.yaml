@@ -59,7 +59,7 @@ grafana:
                 "targets": [
                   {
                     "datasource": { "type": "prometheus", "uid": "prometheus" },
-                    "expr": "increase(suma_operaciones_total[24h])",
+                    "expr": "sum by (pods) (increase(suma_operaciones_total[24h]))",
                     "legendFormat": "{{pods}} pod(s)",
                     "instant": true,
                     "refId": "A"
