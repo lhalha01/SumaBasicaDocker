@@ -58,7 +58,7 @@ grafana:
                 "targets": [
                   {
                     "datasource": { "type": "prometheus", "uid": "prometheus" },
-                    "expr": "sum by (pods) (increase(suma_operaciones_total[24h]))",
+                    "expr": "round(sum by (pods) (increase(suma_operaciones_total[24h])))",
                     "legendFormat": "{{pods}} pods",
                     "instant": true,
                     "refId": "A"
@@ -94,7 +94,7 @@ grafana:
               {
                 "id": 3,
                 "type": "stat",
-                "title": "Total operaciones (todas)",
+                "title": "Total operaciones (histórico)",
                 "gridPos": { "x": 0, "y": 9, "w": 6, "h": 4 },
                 "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
