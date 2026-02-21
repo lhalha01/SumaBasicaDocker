@@ -245,10 +245,13 @@ stages:
                     ]
                   }]
                 }
-                data = json.dumps(payload).encode()
-                req2 = urllib.request.Request(SLACK_URL, data=data, headers={"Content-Type": "application/json"})
-                with urllib.request.urlopen(req2, timeout=10) as resp2:
-                  print(f"Slack: HTTP {resp2.status}")
+                try:
+                  data = json.dumps(payload).encode()
+                  req2 = urllib.request.Request(SLACK_URL, data=data, headers={"Content-Type": "application/json"})
+                  with urllib.request.urlopen(req2, timeout=10) as resp2:
+                    print(f"Slack: HTTP {resp2.status}")
+                except Exception as slack_err:
+                  print(f"Slack notification failed (non-blocking): {slack_err}")
                 PYEOF
                 true
 
