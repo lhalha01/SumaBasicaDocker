@@ -406,7 +406,7 @@ stages:
                   .
 
   - stage: DocsGenerate
-    displayName: 'Docs as Code — Build & Deploy'
+    displayName: 'Docs as Code — Build & Push'
     dependsOn: SecurityScan
     jobs:
       - job: BuildDocs
@@ -522,7 +522,7 @@ stages:
                 true
 
           - task: AzureCLI@2
-            displayName: 'Generate changelog, build & push docs image, deploy to AKS'
+            displayName: 'Generate changelog, build & push docs image'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
               scriptType: 'bash'
@@ -547,7 +547,7 @@ stages:
                 sudo mv git-cliff /usr/local/bin/git-cliff
                 git-cliff --config cliff.toml --output docs/changelog.md || true
 
-                # ── Build docs image ──────────────────────────────────────────
+                # ── Build & push docs image (deploy se hace en DeployAKS) ─────
                 DOCS_IMAGE="$ACR_LOGIN_SERVER/suma-docs:$(Build.BuildId)"
 
                 az acr login --name "$ACR_NAME"
@@ -558,22 +558,7 @@ stages:
                 docker push "$DOCS_IMAGE"
                 docker push "$ACR_LOGIN_SERVER/suma-docs:latest"
 
-                # ── Deploy to AKS ─────────────────────────────────────────────
-                az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
-
-                sed "s|__DOCS_IMAGE__|$DOCS_IMAGE|g" k8s/docs-deployment.yaml | kubectl apply -f -
-                kubectl set image deployment/suma-docs \
-                  suma-docs="$DOCS_IMAGE" \
-                  -n "$(namespace)" || true
-                kubectl rollout status deployment/suma-docs \
-                  -n "$(namespace)" --timeout=120s
-
-                echo "───────────────────────────────────────────"
-                echo "Docs IP pública:"
-                kubectl get svc suma-docs -n "$(namespace)" \
-                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
-                echo ""
-                echo "───────────────────────────────────────────"
+                echo "✓ Docs image pushed: $DOCS_IMAGE"
 
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
@@ -680,4 +665,21 @@ stages:
                         echo "=================================================="
                         exit 1
                       }
+
+                      # ── Deploy suma-docs (imagen construida en DocsGenerate) ─
+                      DOCS_IMAGE="$ACR_LOGIN_SERVER/suma-docs:$(Build.BuildId)"
+                      sed "s|__DOCS_IMAGE__|$DOCS_IMAGE|g" k8s/docs-deployment.yaml | kubectl apply -f -
+                      kubectl set image deployment/suma-docs \
+                        suma-docs="$DOCS_IMAGE" \
+                        -n "$(namespace)" || true
+                      kubectl rollout status deployment/suma-docs \
+                        -n "$(namespace)" --timeout=120s
+
+                      echo "───────────────────────────────────────────"
+                      echo "Docs IP pública:"
+                      kubectl get svc suma-docs -n "$(namespace)" \
+                        -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
+                      echo ""
+                      echo "───────────────────────────────────────────"
+
                       kubectl get deployments,services,pods -n "$(namespace)"
