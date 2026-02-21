@@ -21,7 +21,7 @@ theme:
         icon: material/brightness-4
         name: Modo claro
   features:
-    - navigation.sections
+    - navigation.tabs
     - navigation.top
     - search.highlight
     - content.code.copy
@@ -53,6 +53,7 @@ markdown_extensions:
       permalink: true
 
 nav:
+  - Inicio: index.md
   - API Reference:
     - proxy.py: api/proxy.md
     - k8s_orchestrator.py: api/orchestrator.md
