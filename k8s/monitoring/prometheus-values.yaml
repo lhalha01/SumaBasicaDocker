@@ -221,7 +221,14 @@ grafana:
                   "name": "datasource",
                   "type": "datasource",
                   "pluginId": "prometheus",
-                  "current": {}
+                  "query": "prometheus",
+                  "current": {
+                    "text": "Prometheus",
+                    "value": "prometheus"
+                  },
+                  "hide": 0,
+                  "includeAll": false,
+                  "refresh": 1
                 }
               ]
             }
