@@ -39,7 +39,7 @@ grafana:
                 "type": "barchart",
                 "title": "Operaciones totales por cantidad de pods usados (\u00faltimas 24h)",
                 "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "orientation": "vertical",
                   "barWidth": 0.6,
@@ -58,7 +58,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "increase(suma_operaciones_total[24h])",
                     "legendFormat": "{{pods}} pod(s)",
                     "instant": true,
@@ -71,7 +71,7 @@ grafana:
                 "type": "timeseries",
                 "title": "Operaciones acumuladas en el tiempo por n\u00b0 de pods",
                 "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "legend": { "displayMode": "list", "placement": "bottom" },
                   "tooltip": { "mode": "multi" }
@@ -85,7 +85,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "suma_operaciones_total",
                     "legendFormat": "{{pods}} pod(s)",
                     "refId": "A"
@@ -97,7 +97,7 @@ grafana:
                 "type": "stat",
                 "title": "Total operaciones (todas)",
                 "gridPos": { "x": 0, "y": 9, "w": 6, "h": 4 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "colorMode": "background",
                   "graphMode": "area",
@@ -110,7 +110,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "sum(suma_operaciones_total)",
                     "legendFormat": "Total",
                     "instant": true,
@@ -123,7 +123,7 @@ grafana:
                 "type": "gauge",
                 "title": "R\u00e9plicas activas de suma-proxy",
                 "gridPos": { "x": 6, "y": 9, "w": 6, "h": 4 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "reduceOptions": { "calcs": ["lastNotNull"] },
                   "showThresholdLabels": false,
@@ -147,7 +147,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "kube_deployment_status_replicas_available{deployment=\"suma-proxy\", namespace=\"calculadora-suma\"}",
                     "legendFormat": "R\u00e9plicas",
                     "instant": true,
@@ -160,7 +160,7 @@ grafana:
                 "type": "timeseries",
                 "title": "Latencia media por endpoint (ms)",
                 "gridPos": { "x": 0, "y": 13, "w": 16, "h": 8 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "legend": { "displayMode": "list", "placement": "bottom" },
                   "tooltip": { "mode": "multi" }
@@ -174,7 +174,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "1000 * rate(flask_http_request_duration_seconds_sum{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m]) / rate(flask_http_request_duration_seconds_count{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m])",
                     "legendFormat": "{{path}}",
                     "refId": "A"
@@ -186,7 +186,7 @@ grafana:
                 "type": "timeseries",
                 "title": "Errores HTTP 5xx (tasa por segundo)",
                 "gridPos": { "x": 16, "y": 13, "w": 8, "h": 8 },
-                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "datasource": { "type": "prometheus", "uid": "prometheus" },
                 "options": {
                   "legend": { "displayMode": "list", "placement": "bottom" },
                   "tooltip": { "mode": "multi" }
@@ -207,7 +207,7 @@ grafana:
                 },
                 "targets": [
                   {
-                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "datasource": { "type": "prometheus", "uid": "prometheus" },
                     "expr": "sum(rate(flask_http_request_total{status=~\"5..\"}[5m]))",
                     "legendFormat": "5xx req/s",
                     "refId": "A"
@@ -215,23 +215,7 @@ grafana:
                 ]
               }
             ],
-            "templating": {
-              "list": [
-                {
-                  "name": "datasource",
-                  "type": "datasource",
-                  "pluginId": "prometheus",
-                  "query": "prometheus",
-                  "current": {
-                    "text": "Prometheus",
-                    "value": "prometheus"
-                  },
-                  "hide": 0,
-                  "includeAll": false,
-                  "refresh": 1
-                }
-              ]
-            }
+            "templating": { "list": [] }
           }
 
   grafana.ini:
