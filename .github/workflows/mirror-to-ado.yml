@@ -1,0 +1,31 @@
+name: Mirror to Azure DevOps
+
+on:
+  push:
+    branches:
+      - '**'
+  delete:  # sincroniza también borrado de ramas
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Push mirror to Azure DevOps
+        env:
+          ADO_PAT: ${{ secrets.ADO_PAT }}
+        run: |
+          set -euo pipefail
+
+          # Construye la URL con PAT embebido
+          ADO_URL="https://${ADO_PAT}@dev.azure.com/<ORG>/<PROJECT>/_git/SumaBasicaDocker"
+
+          git remote add ado "$ADO_URL" 2>/dev/null || \
+            git remote set-url ado "$ADO_URL"
+
+          # --mirror sincroniza ramas, tags y borrados
+          git push ado --mirror

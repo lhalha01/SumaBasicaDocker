@@ -24,7 +24,7 @@ variables:
   sonarOrganization: 'lhalha01'
   sonarProjectKey: 'lhalha01_SumaBasicaDocker'
   sonarProjectName: 'SumaBasicaDocker'
-  slackWebhookUrl: ''  # Override with secret pipeline variable: SLACK_WEBHOOK_URL
+  slackWebhookUrl: ''  # Stored in Key Vault as: SLACKWEBHOOKURL
 
 stages:
   - stage: TerraformPlan
@@ -119,10 +119,18 @@ stages:
           - checkout: self
             fetchDepth: 0
 
+          - task: AzureKeyVault@2
+            displayName: 'Load secrets from Key Vault'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              KeyVaultName: '$(keyVaultName)'
+              SecretsFilter: 'SONARTOKEN,SLACKWEBHOOKURL'
+              RunAsPreJob: false
+
           - task: Bash@3
             displayName: 'Run SonarCloud analysis (CLI)'
             env:
-              SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_TOKEN: $(SONARTOKEN)
               SONAR_ORGANIZATION: $(sonarOrganization)
               SONAR_PROJECT_KEY: $(sonarProjectKey)
               SONAR_PROJECT_NAME: $(sonarProjectName)
@@ -151,9 +159,9 @@ stages:
             displayName: 'Fetch SonarCloud results and notify Slack'
             condition: succeededOrFailed()
             env:
-              SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_TOKEN: $(SONARTOKEN)
               SONAR_PROJECT_KEY: $(sonarProjectKey)
-              SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
+              SLACK_WEBHOOK_URL: $(SLACKWEBHOOKURL)
               BUILD_BUILDID: $(Build.BuildId)
             inputs:
               targetType: 'inline'
@@ -460,10 +468,18 @@ stages:
           - checkout: self
             fetchDepth: 0
 
+          - task: AzureKeyVault@2
+            displayName: 'Load SONARTOKEN from Key Vault'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              KeyVaultName: '$(keyVaultName)'
+              SecretsFilter: 'SONARTOKEN'
+              RunAsPreJob: false
+
           - task: Bash@3
             displayName: 'Generate SonarCloud report for docs'
             env:
-              SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_TOKEN: $(SONARTOKEN)
               SONAR_PROJECT_KEY: $(sonarProjectKey)
               BUILD_BUILDID: $(Build.BuildId)
             inputs:
