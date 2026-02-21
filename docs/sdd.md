@@ -1,4 +1,4 @@
-# SDD — Software Design Document  
+# Specification-Driven Development (SDD)  
 ## SumaBasicaDocker — Calculadora Distribuida en Kubernetes
 
 **Versión**: 1.0  
