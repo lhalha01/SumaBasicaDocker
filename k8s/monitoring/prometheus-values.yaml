@@ -79,14 +79,15 @@ grafana:
                   "defaults": {
                     "color": { "mode": "palette-classic" },
                     "unit": "short",
-                    "custom": { "lineWidth": 2, "fillOpacity": 10 }
+                    "decimals": 0,
+                    "custom": { "lineWidth": 2, "fillOpacity": 10, "xTickLabelSpacing": 200 }
                   }
                 },
                 "targets": [
                   {
                     "datasource": { "type": "prometheus", "uid": "prometheus" },
-                    "expr": "suma_operaciones_total",
-                    "legendFormat": "{{pods}} pod(s)",
+                    "expr": "sum by (pods) (suma_operaciones_total)",
+                    "legendFormat": "{{pods}} pods",
                     "refId": "A"
                   }
                 ]
