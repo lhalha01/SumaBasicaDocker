@@ -1,5 +1,7 @@
 from flask import Flask, request, jsonify, make_response, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
+from prometheus_flask_exporter import PrometheusMetrics
+from prometheus_client import Counter
 import requests
 import os
 import signal
@@ -12,6 +14,15 @@ from k8s_orchestrator import K8sOrchestrator
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+metrics = PrometheusMetrics(app, path='/metrics')
+metrics.info('suma_proxy_info', 'SumaBasicaDocker proxy service', version='1.0.0')
+
+# Counter: nro de operaciones de suma agrupadas por cantidad de pods que requirió la operación
+ops_by_pods = Counter(
+    'suma_operaciones_total',
+    'Número de operaciones de suma realizadas, etiquetadas por la cantidad de pods requeridos',
+    ['pods']
+)
 
 # Shutdown flag — set by SIGTERM so SSE streams exit cleanly
 _shutdown = threading.Event()
@@ -149,6 +160,25 @@ def docs_url():
             [
                 "kubectl", "get", "svc", "suma-docs",
                 "-n", NAMESPACE,
+                "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"
+            ],
+            capture_output=True, text=True, timeout=5
+        )
+        ip = result.stdout.strip()
+        if ip:
+            return jsonify({'url': f'http://{ip}', 'status': 'ok'})
+        return jsonify({'url': None, 'status': 'pending'})
+    except Exception as e:
+        return jsonify({'url': None, 'status': 'error', 'detail': str(e)})
+
+@app.route('/grafana-url')
+def grafana_url():
+    """Devuelve la URL pública de Grafana (kube-prometheus-stack LoadBalancer en namespace monitoring)."""
+    try:
+        result = subprocess.run(
+            [
+                "kubectl", "get", "svc", "kube-prometheus-stack-grafana",
+                "-n", "monitoring",
                 "-o", "jsonpath={.status.loadBalancer.ingress[0].ip}"
             ],
             capture_output=True, text=True, timeout=5
@@ -338,6 +368,9 @@ def suma_n_digitos():
             'Details': detalles,
             'EventosEscalado': eventos_escalado
         }
+
+        # Incrementar counter de operaciones según pods usados
+        ops_by_pods.labels(pods=str(num_digitos)).inc()
 
         # Ejecutar scale-down en background para visualizar transición a zero
         if AUTO_SCALE_DOWN:

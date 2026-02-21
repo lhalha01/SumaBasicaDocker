@@ -23,7 +23,32 @@ async function resolveDocsLink() {
     }
 }
 
-document.addEventListener('DOMContentLoaded', resolveDocsLink);
+// ── Grafana link auto-resolve ──────────────────────────────────
+async function resolveGrafanaLink() {
+    const link = document.getElementById('grafana-link');
+    if (!link) return;
+
+    try {
+        const res = await fetch('/grafana-url');
+        if (!res.ok) throw new Error('fetch failed');
+        const data = await res.json();
+        if (data.url) {
+            link.href = data.url;
+            link.classList.remove('grafana-pending');
+        } else {
+            link.classList.add('grafana-pending');
+            link.title = 'Grafana no disponible aún (LoadBalancer pendiente)';
+        }
+    } catch (_) {
+        link.classList.add('grafana-pending');
+        link.title = 'No se pudo resolver la URL de Grafana';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    resolveDocsLink();
+    resolveGrafanaLink();
+});
 // ────────────────────────────────────────────────────────────
 let terminalStreamConnected = false;
 let terminalStatusState = 'connecting';

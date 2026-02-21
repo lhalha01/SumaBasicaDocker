@@ -3,3 +3,4 @@ flask-cors==4.0.2
 requests==2.32.3
 jaraco.context==6.1.0
 wheel==0.46.2
+prometheus-flask-exporter==0.23.1

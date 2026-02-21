@@ -39,6 +39,41 @@
 }
 /* ─────────────────────────────────────────────────────────── */
 
+/* ── Grafana badge ──────────────────────────────────────────── */
+.grafana-badge {
+    position: fixed;
+    top: 18px;
+    right: 168px;
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    background: linear-gradient(135deg, #e65100 0%, #bf360c 100%);
+    color: #fff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    border-radius: 22px;
+    box-shadow: 0 4px 14px rgba(230, 81, 0, 0.45);
+    transition: transform 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.grafana-badge:hover {
+    background: linear-gradient(135deg, #ff6d00 0%, #e65100 100%);
+    box-shadow: 0 6px 20px rgba(230, 81, 0, 0.6);
+    transform: translateY(-2px);
+}
+
+.grafana-badge.grafana-pending {
+    background: linear-gradient(135deg, #78909c 0%, #546e7a 100%);
+    box-shadow: 0 4px 14px rgba(84, 110, 122, 0.4);
+    pointer-events: none;
+    opacity: 0.75;
+}
+/* ─────────────────────────────────────────────────────────── */
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

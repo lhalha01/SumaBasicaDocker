@@ -24,6 +24,7 @@ variables:
   sonarOrganization: 'lhalha01'
   sonarProjectKey: 'lhalha01_SumaBasicaDocker'
   sonarProjectName: 'SumaBasicaDocker'
+  slackWebhookUrl: ''  # Override with secret pipeline variable: SLACK_WEBHOOK_URL
 
 stages:
   - stage: TerraformPlan
@@ -61,6 +62,50 @@ stages:
                   -var="resource_group_name=$(resourceGroup)" \
                   -var="existing_aks_name=$(aksClusterName)" \
                   -var="kubelet_identity_object_id=$(AKS_KUBELET_OBJECT_ID)"
+
+          - task: AzureCLI@2
+            displayName: 'Helm install kube-prometheus-stack (idempotente)'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+                az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
+
+                # Instalar Helm si no está disponible
+                if ! command -v helm &>/dev/null; then
+                  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                fi
+
+                helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                helm repo update
+
+                kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+                # Obtener password de Grafana desde Key Vault (fallback a valor por defecto)
+                GRAFANA_PASS=$(az keyvault secret show \
+                  --vault-name "$(keyVaultName)" \
+                  --name "grafana-admin-password" \
+                  --query value -o tsv 2>/dev/null || echo "SumaAdmin2026!")
+
+                helm upgrade --install kube-prometheus-stack \
+                  prometheus-community/kube-prometheus-stack \
+                  --namespace monitoring \
+                  --values k8s/monitoring/prometheus-values.yaml \
+                  --set grafana.adminPassword="$GRAFANA_PASS" \
+                  --atomic \
+                  --timeout 8m \
+                  --wait
+
+                # Aplicar ServiceMonitor para suma-proxy
+                kubectl apply -f k8s/monitoring/servicemonitor-proxy.yaml
+
+                echo "✓ kube-prometheus-stack listo en namespace monitoring"
+                echo "Grafana LoadBalancer:"
+                kubectl get svc -n monitoring kube-prometheus-stack-grafana \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
+                echo ""
 
   - stage: CodeQuality
     displayName: 'SonarCloud Code Quality'
@@ -101,6 +146,103 @@ stages:
                   -Dsonar.sources=. \
                   -Dsonar.exclusions="**/__pycache__/**,**/trivy-reports/**,infra/**,k8s/**" \
                   -Dsonar.python.version=3.11 || true
+
+          - task: Bash@3
+            displayName: 'Fetch SonarCloud results and notify Slack'
+            condition: succeededOrFailed()
+            env:
+              SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_PROJECT_KEY: $(sonarProjectKey)
+              SLACK_WEBHOOK_URL: $(SLACK_WEBHOOK_URL)
+              BUILD_BUILDID: $(Build.BuildId)
+            inputs:
+              targetType: 'inline'
+              script: |
+                set +e
+                python3 - << 'PYEOF'
+                import json, os, sys, time, urllib.request, urllib.parse, base64
+                TOKEN     = os.environ.get("SONAR_TOKEN", "")
+                PROJ_KEY  = os.environ.get("SONAR_PROJECT_KEY", "lhalha01_SumaBasicaDocker")
+                SLACK_URL = os.environ.get("SLACK_WEBHOOK_URL", "")
+                BUILD_ID  = os.environ.get("BUILD_BUILDID", "?")
+                DASH_URL  = f"https://sonarcloud.io/project/overview?id={PROJ_KEY}"
+                if not TOKEN:
+                  print("SONAR_TOKEN not set — skipping")
+                  sys.exit(0)
+                def sonar_get(path):
+                  url = f"https://sonarcloud.io/api/{path}"
+                  req = urllib.request.Request(url)
+                  creds = base64.b64encode(f"{TOKEN}:".encode()).decode()
+                  req.add_header("Authorization", f"Basic {creds}")
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                    return json.loads(r.read())
+                report_file = ".scannerwork/report-task.txt"
+                if os.path.exists(report_file):
+                  ce_id = None
+                  with open(report_file) as fh:
+                    for line in fh:
+                      if line.startswith("ceTaskId="):
+                        ce_id = line.strip().split("=", 1)[1]
+                  if ce_id:
+                    print(f"Waiting for CE task {ce_id}...")
+                    for _ in range(24):
+                      try:
+                        resp = sonar_get(f"ce/task?id={ce_id}")
+                        st = resp["task"]["status"]
+                        print(f"  status: {st}")
+                        if st in ("SUCCESS", "FAILED", "CANCELLED"):
+                          break
+                      except Exception as err:
+                        print(f"  poll error: {err}")
+                      time.sleep(5)
+                METRICS = "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,reliability_rating,security_rating,sqale_rating"
+                try:
+                  mr = sonar_get(f"measures/component?component={urllib.parse.quote(PROJ_KEY)}&metricKeys={METRICS}")
+                  qr = sonar_get(f"qualitygates/project_status?projectKey={urllib.parse.quote(PROJ_KEY)}")
+                except Exception as err:
+                  print(f"API error: {err} — skipping notification")
+                  sys.exit(0)
+                m   = {x["metric"]: x.get("value", "\u2014") for x in mr["component"]["measures"]}
+                qg  = qr["projectStatus"]["status"]
+                RAT = {"1": "A", "2": "B", "3": "C", "4": "D", "5": "E"}
+                def rfmt(v): return RAT.get(str(int(float(v))), v) if v not in ("\u2014", "") else "\u2014"
+                def pfmt(v): return f"{float(v):.1f}%" if v not in ("\u2014", "") else "\u2014"
+                qg_ok   = qg == "OK"
+                qg_icon = "\u2705" if qg_ok else "\u274c"
+                color   = "#36a64f" if qg_ok else "#d9534f"
+                label   = "Passed" if qg_ok else "Failed"
+                print(f"{qg_icon} Quality Gate: {label}")
+                print(f"Bugs={m.get('bugs','\u2014')} Vuln={m.get('vulnerabilities','\u2014')} Smells={m.get('code_smells','\u2014')} Coverage={pfmt(m.get('coverage','\u2014'))}")
+                if not SLACK_URL or not SLACK_URL.startswith("https://"):
+                  print("SLACK_WEBHOOK_URL not configured — skipping notification")
+                  sys.exit(0)
+                payload = {
+                  "attachments": [{
+                    "color": color,
+                    "blocks": [
+                      {"type": "header", "text": {"type": "plain_text", "text": f"{qg_icon} SonarCloud \u2014 SumaBasicaDocker #{BUILD_ID}"}},
+                      {"type": "section", "fields": [
+                        {"type": "mrkdwn", "text": f"*Quality Gate:* {qg_icon} {label}"},
+                        {"type": "mrkdwn", "text": f"*L\u00edneas:* {m.get('ncloc','\u2014')}"},
+                        {"type": "mrkdwn", "text": f"*Bugs:* {m.get('bugs','\u2014')}"},
+                        {"type": "mrkdwn", "text": f"*Vulnerabilidades:* {m.get('vulnerabilities','\u2014')}"},
+                        {"type": "mrkdwn", "text": f"*Code Smells:* {m.get('code_smells','\u2014')}"},
+                        {"type": "mrkdwn", "text": f"*Cobertura:* {pfmt(m.get('coverage','\u2014'))}"},
+                        {"type": "mrkdwn", "text": f"*Duplicaci\u00f3n:* {pfmt(m.get('duplicated_lines_density','\u2014'))}"},
+                        {"type": "mrkdwn", "text": f"*Fiabilidad:* {rfmt(m.get('reliability_rating','\u2014'))}  *Seguridad:* {rfmt(m.get('security_rating','\u2014'))}  *Mantenib.:* {rfmt(m.get('sqale_rating','\u2014'))}"},
+                      ]},
+                      {"type": "actions", "elements": [
+                        {"type": "button", "text": {"type": "plain_text", "text": "Ver en SonarCloud"}, "url": DASH_URL, "style": "primary"}
+                      ]}
+                    ]
+                  }]
+                }
+                data = json.dumps(payload).encode()
+                req2 = urllib.request.Request(SLACK_URL, data=data, headers={"Content-Type": "application/json"})
+                with urllib.request.urlopen(req2, timeout=10) as resp2:
+                  print(f"Slack: HTTP {resp2.status}")
+                PYEOF
+                true
 
   - stage: BuildAndPush
     displayName: 'Build and Push Proxy Image'
@@ -308,7 +450,7 @@ stages:
                   .
 
   - stage: DocsGenerate
-    displayName: 'Docs as Code — Build & Deploy'
+    displayName: 'Docs as Code — Build & Push'
     dependsOn: SecurityScan
     jobs:
       - job: BuildDocs
@@ -318,8 +460,113 @@ stages:
           - checkout: self
             fetchDepth: 0
 
+          - task: Bash@3
+            displayName: 'Generate SonarCloud report for docs'
+            env:
+              SONAR_TOKEN: $(SONAR_TOKEN)
+              SONAR_PROJECT_KEY: $(sonarProjectKey)
+              BUILD_BUILDID: $(Build.BuildId)
+            inputs:
+              targetType: 'inline'
+              script: |
+                set +e
+                python3 - << 'PYEOF'
+                import json, os, sys, urllib.request, urllib.parse, base64, datetime
+                TOKEN     = os.environ.get("SONAR_TOKEN", "")
+                PROJ_KEY  = os.environ.get("SONAR_PROJECT_KEY", "lhalha01_SumaBasicaDocker")
+                BUILD_ID  = os.environ.get("BUILD_BUILDID", "\u2014")
+                NOW       = datetime.datetime.utcnow().strftime("%d/%m/%Y %H:%M UTC")
+                DASH_URL  = f"https://sonarcloud.io/project/overview?id={PROJ_KEY}"
+                PK        = PROJ_KEY
+                PLACEHOLDER = (
+                  "# Calidad de C\u00f3digo \u2014 SonarCloud\n\n"
+                  '!!! warning "Informe no disponible"\n'
+                  f"    No se pudo obtener m\u00e9tricas. Visita [{DASH_URL}]({DASH_URL}).\n"
+                )
+                if not TOKEN:
+                  print("SONAR_TOKEN not set \u2014 writing placeholder")
+                  open("docs/sonarcloud.md", "w").write(PLACEHOLDER)
+                  sys.exit(0)
+                def sonar_get(path):
+                  url = f"https://sonarcloud.io/api/{path}"
+                  req = urllib.request.Request(url)
+                  creds = base64.b64encode(f"{TOKEN}:".encode()).decode()
+                  req.add_header("Authorization", f"Basic {creds}")
+                  with urllib.request.urlopen(req, timeout=20) as r:
+                    return json.loads(r.read())
+                try:
+                  METRICS = "bugs,vulnerabilities,code_smells,coverage,duplicated_lines_density,ncloc,reliability_rating,security_rating,sqale_rating"
+                  mr = sonar_get(f"measures/component?component={urllib.parse.quote(PK)}&metricKeys={METRICS}")
+                  qr = sonar_get(f"qualitygates/project_status?projectKey={urllib.parse.quote(PK)}")
+                except Exception as err:
+                  print(f"API error: {err} \u2014 writing placeholder")
+                  open("docs/sonarcloud.md", "w").write(PLACEHOLDER)
+                  sys.exit(0)
+                m   = {x["metric"]: x.get("value", "\u2014") for x in mr["component"]["measures"]}
+                qg  = qr["projectStatus"]["status"]
+                RAT = {"1": "A \u2705", "2": "B \U0001f7e1", "3": "C \U0001f7e0", "4": "D \U0001f534", "5": "E \u274c"}
+                def rfmt(v): return RAT.get(str(int(float(v))), v) if v not in ("\u2014", "") else "\u2014"
+                def pfmt(v): return f"{float(v):.1f}%" if v not in ("\u2014", "") else "\u2014"
+                qg_ok   = qg == "OK"
+                qg_icon = "\u2705 Passed" if qg_ok else "\u274c Failed"
+                lines = []
+                lines.append("# Calidad de C\u00f3digo \u2014 SonarCloud")
+                lines.append("")
+                lines.append('!!! info "Generaci\u00f3n autom\u00e1tica"')
+                lines.append("    Informe generado con la [SonarCloud API](https://sonarcloud.io/web_api) en la pipeline CI/CD.")
+                lines.append("")
+                lines.append(f"> **\u00daltimo an\u00e1lisis:** {NOW} \u2014 Pipeline **#{BUILD_ID}**")
+                lines.append(f"> \U0001f517 [Ver dashboard completo en SonarCloud]({DASH_URL})")
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+                lines.append("## Quality Gate")
+                lines.append("")
+                lines.append("| Estado |")
+                lines.append("|:---:|")
+                lines.append(f"| **{qg_icon}** |")
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+                lines.append("## M\u00e9tricas principales")
+                lines.append("")
+                lines.append("| M\u00e9trica | Valor |")
+                lines.append("|---|---|")
+                lines.append(f"| \U0001f41b Bugs | {m.get('bugs','\u2014')} |")
+                lines.append(f"| \U0001f512 Vulnerabilidades | {m.get('vulnerabilities','\u2014')} |")
+                lines.append(f"| \U0001f300 Code Smells | {m.get('code_smells','\u2014')} |")
+                lines.append(f"| \U0001f4ca Cobertura de tests | {pfmt(m.get('coverage','\u2014'))} |")
+                lines.append(f"| \U0001f4cb Duplicaci\u00f3n de c\u00f3digo | {pfmt(m.get('duplicated_lines_density','\u2014'))} |")
+                lines.append(f"| \U0001f4cf L\u00edneas de c\u00f3digo | {m.get('ncloc','\u2014')} |")
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+                lines.append("## Ratings")
+                lines.append("")
+                lines.append("| Dimensi\u00f3n | Rating |")
+                lines.append("|---|---|")
+                lines.append(f"| Fiabilidad | {rfmt(m.get('reliability_rating','\u2014'))} |")
+                lines.append(f"| Seguridad | {rfmt(m.get('security_rating','\u2014'))} |")
+                lines.append(f"| Mantenibilidad | {rfmt(m.get('sqale_rating','\u2014'))} |")
+                lines.append("")
+                lines.append("---")
+                lines.append("")
+                lines.append("## Badges en tiempo real")
+                lines.append("")
+                lines.append(f"[![Quality Gate](https://sonarcloud.io/api/project_badges/measure?project={PK}&metric=alert_status)](https://sonarcloud.io/project/overview?id={PK})")
+                lines.append(f"[![Bugs](https://sonarcloud.io/api/project_badges/measure?project={PK}&metric=bugs)](https://sonarcloud.io/project/overview?id={PK})")
+                lines.append(f"[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project={PK}&metric=code_smells)](https://sonarcloud.io/project/overview?id={PK})")
+                lines.append(f"[![Coverage](https://sonarcloud.io/api/project_badges/measure?project={PK}&metric=coverage)](https://sonarcloud.io/project/overview?id={PK})")
+                lines.append(f"[![Duplicated Lines](https://sonarcloud.io/api/project_badges/measure?project={PK}&metric=duplicated_lines_density)](https://sonarcloud.io/project/overview?id={PK})")
+                lines.append("")
+                with open("docs/sonarcloud.md", "w") as fh:
+                  fh.write("\n".join(lines))
+                print("\u2713 docs/sonarcloud.md generated")
+                PYEOF
+                true
+
           - task: AzureCLI@2
-            displayName: 'Generate changelog, build & push docs image, deploy to AKS'
+            displayName: 'Generate changelog, build & push docs image'
             inputs:
               azureSubscription: '$(azureServiceConnection)'
               scriptType: 'bash'
@@ -344,7 +591,7 @@ stages:
                 sudo mv git-cliff /usr/local/bin/git-cliff
                 git-cliff --config cliff.toml --output docs/changelog.md || true
 
-                # ── Build docs image ──────────────────────────────────────────
+                # ── Build & push docs image (deploy se hace en DeployAKS) ─────
                 DOCS_IMAGE="$ACR_LOGIN_SERVER/suma-docs:$(Build.BuildId)"
 
                 az acr login --name "$ACR_NAME"
@@ -355,22 +602,7 @@ stages:
                 docker push "$DOCS_IMAGE"
                 docker push "$ACR_LOGIN_SERVER/suma-docs:latest"
 
-                # ── Deploy to AKS ─────────────────────────────────────────────
-                az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
-
-                sed "s|__DOCS_IMAGE__|$DOCS_IMAGE|g" k8s/docs-deployment.yaml | kubectl apply -f -
-                kubectl set image deployment/suma-docs \
-                  suma-docs="$DOCS_IMAGE" \
-                  -n "$(namespace)" || true
-                kubectl rollout status deployment/suma-docs \
-                  -n "$(namespace)" --timeout=120s
-
-                echo "───────────────────────────────────────────"
-                echo "Docs IP pública:"
-                kubectl get svc suma-docs -n "$(namespace)" \
-                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
-                echo ""
-                echo "───────────────────────────────────────────"
+                echo "✓ Docs image pushed: $DOCS_IMAGE"
 
   - stage: DeployAKS
     displayName: 'Deploy to AKS'
@@ -477,4 +709,21 @@ stages:
                         echo "=================================================="
                         exit 1
                       }
+
+                      # ── Deploy suma-docs (imagen construida en DocsGenerate) ─
+                      DOCS_IMAGE="$ACR_LOGIN_SERVER/suma-docs:$(Build.BuildId)"
+                      sed "s|__DOCS_IMAGE__|$DOCS_IMAGE|g" k8s/docs-deployment.yaml | kubectl apply -f -
+                      kubectl set image deployment/suma-docs \
+                        suma-docs="$DOCS_IMAGE" \
+                        -n "$(namespace)" || true
+                      kubectl rollout status deployment/suma-docs \
+                        -n "$(namespace)" --timeout=120s
+
+                      echo "───────────────────────────────────────────"
+                      echo "Docs IP pública:"
+                      kubectl get svc suma-docs -n "$(namespace)" \
+                        -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
+                      echo ""
+                      echo "───────────────────────────────────────────"
+
                       kubectl get deployments,services,pods -n "$(namespace)"
