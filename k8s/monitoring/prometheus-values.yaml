@@ -7,6 +7,130 @@ grafana:
     enabled: false
   defaultDashboardsEnabled: true
   # adminPassword se inyecta en la pipeline via --set desde Key Vault
+
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: suma-custom
+          orgId: 1
+          folder: Suma Calculadora
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/suma-custom
+
+  dashboards:
+    suma-custom:
+      suma-pods-ops:
+        json: |-
+          {
+            "uid": "suma-pods-ops",
+            "title": "Suma \u2014 Operaciones por N\u00famero de Pods",
+            "tags": ["suma", "kubernetes"],
+            "timezone": "browser",
+            "schemaVersion": 38,
+            "version": 1,
+            "refresh": "30s",
+            "panels": [
+              {
+                "id": 1,
+                "type": "barchart",
+                "title": "Operaciones totales por cantidad de pods usados (\u00faltimas 24h)",
+                "gridPos": { "x": 0, "y": 0, "w": 12, "h": 9 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "orientation": "vertical",
+                  "barWidth": 0.6,
+                  "groupWidth": 0.7,
+                  "xField": "pods",
+                  "legend": { "displayMode": "list", "placement": "bottom" },
+                  "tooltip": { "mode": "single" }
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "custom": { "lineWidth": 1, "fillOpacity": 80 },
+                    "unit": "short",
+                    "displayName": "Operaciones"
+                  }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "increase(suma_operaciones_total[24h])",
+                    "legendFormat": "{{pods}} pod(s)",
+                    "instant": true,
+                    "refId": "A"
+                  }
+                ]
+              },
+              {
+                "id": 2,
+                "type": "timeseries",
+                "title": "Operaciones acumuladas en el tiempo por n\u00b0 de pods",
+                "gridPos": { "x": 12, "y": 0, "w": 12, "h": 9 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "legend": { "displayMode": "list", "placement": "bottom" },
+                  "tooltip": { "mode": "multi" }
+                },
+                "fieldConfig": {
+                  "defaults": {
+                    "color": { "mode": "palette-classic" },
+                    "unit": "short",
+                    "custom": { "lineWidth": 2, "fillOpacity": 10 }
+                  }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "suma_operaciones_total",
+                    "legendFormat": "{{pods}} pod(s)",
+                    "refId": "A"
+                  }
+                ]
+              },
+              {
+                "id": 3,
+                "type": "stat",
+                "title": "Total operaciones (todas)",
+                "gridPos": { "x": 0, "y": 9, "w": 6, "h": 4 },
+                "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                "options": {
+                  "colorMode": "background",
+                  "graphMode": "area",
+                  "reduceOptions": { "calcs": ["lastNotNull"] }
+                },
+                "fieldConfig": {
+                  "defaults": { "color": { "mode": "thresholds" }, "unit": "short",
+                    "thresholds": { "mode": "absolute",
+                      "steps": [{"color": "green", "value": null}] } }
+                },
+                "targets": [
+                  {
+                    "datasource": { "type": "prometheus", "uid": "${datasource}" },
+                    "expr": "sum(suma_operaciones_total)",
+                    "legendFormat": "Total",
+                    "instant": true,
+                    "refId": "A"
+                  }
+                ]
+              }
+            ],
+            "templating": {
+              "list": [
+                {
+                  "name": "datasource",
+                  "type": "datasource",
+                  "pluginId": "prometheus",
+                  "current": {}
+                }
+              ]
+            }
+          }
+
   grafana.ini:
     server:
       root_url: "%(protocol)s://%(domain)s/"
