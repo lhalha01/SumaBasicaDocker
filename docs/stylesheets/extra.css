@@ -3,16 +3,20 @@
   display: none;
 }
 
-/* Move TOC sidebar to the left at 25% width */
+/* Move TOC to left at 25% using flex */
 .md-sidebar--secondary {
   order: -1;
-  left: 0;
-  right: auto;
+  flex: 0 0 25%;
   width: 25%;
+  max-width: 25%;
+  min-width: 0;
 }
 
-/* Content takes remaining 75% */
+/* Content fills remaining 75% */
 .md-content {
-  margin-left: 25%;
+  flex: 1 1 75%;
+  max-width: 75%;
+  min-width: 0;
+  margin-left: 0 !important;
   margin-right: 0 !important;
 }
