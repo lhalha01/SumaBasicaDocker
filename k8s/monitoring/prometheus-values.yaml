@@ -232,6 +232,22 @@ grafana:
       root_url: "%(protocol)s://%(domain)s/"
     auth.anonymous:
       enabled: false
+    dashboards:
+      allow_ui_updates: true
+      default_home_dashboard_path: ""
+    users:
+      allow_sign_up: false
+
+  # Datasource explícito con UID fijo para que los dashboards lo encuentren
+  additionalDataSources:
+    - name: Prometheus
+      type: prometheus
+      uid: prometheus
+      url: http://kube-prometheus-stack-prometheus.monitoring:9090
+      access: proxy
+      isDefault: true
+      jsonData:
+        timeInterval: "30s"
 
 prometheus:
   prometheusSpec:
