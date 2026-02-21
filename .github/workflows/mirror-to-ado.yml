@@ -22,7 +22,7 @@ jobs:
           set -euo pipefail
 
           # Construye la URL con PAT embebido
-          ADO_URL="https://${ADO_PAT}@dev.azure.com/<ORG>/<PROJECT>/_git/SumaBasicaDocker"
+          ADO_URL="https://${ADO_PAT}@dev.azure.com/STAFFLABS/LabsDevops/_git/SumaBasicaDocker"
 
           git remote add ado "$ADO_URL" 2>/dev/null || \
             git remote set-url ado "$ADO_URL"
