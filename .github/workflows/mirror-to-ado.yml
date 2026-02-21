@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - '**'
-  delete:  # sincroniza también borrado de ramas
 
 jobs:
   mirror:
@@ -15,17 +14,20 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Fetch all branches
+        run: git fetch --all
+
       - name: Push mirror to Azure DevOps
         env:
           ADO_PAT: ${{ secrets.ADO_PAT }}
         run: |
           set -euo pipefail
 
-          # Construye la URL con PAT embebido
           ADO_URL="https://${ADO_PAT}@dev.azure.com/STAFFLABS/LabsDevops/_git/SumaBasicaDocker"
 
           git remote add ado "$ADO_URL" 2>/dev/null || \
             git remote set-url ado "$ADO_URL"
 
-          # --mirror sincroniza ramas, tags y borrados
-          git push ado --mirror
+          # --all + --tags: sincroniza ramas y tags sin borrar ramas en ADO
+          git push ado --all
+          git push ado --tags
