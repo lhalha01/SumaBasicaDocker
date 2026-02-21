@@ -169,13 +169,13 @@ grafana:
                   "defaults": {
                     "color": { "mode": "palette-classic" },
                     "unit": "ms",
-                    "custom": { "lineWidth": 2, "fillOpacity": 8 }
+                    "custom": { "lineWidth": 2, "fillOpacity": 8, "xTickLabelSpacing": 200 }
                   }
                 },
                 "targets": [
                   {
                     "datasource": { "type": "prometheus", "uid": "prometheus" },
-                    "expr": "1000 * rate(flask_http_request_duration_seconds_sum{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m]) / rate(flask_http_request_duration_seconds_count{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m])",
+                    "expr": "1000 * sum by (path) (rate(flask_http_request_duration_seconds_sum{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m])) / sum by (path) (rate(flask_http_request_duration_seconds_count{path=~\"/suma-n-digitos|/docs-url|/grafana-url\"}[5m]))",
                     "legendFormat": "{{path}}",
                     "refId": "A"
                   }
