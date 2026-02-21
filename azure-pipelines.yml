@@ -94,8 +94,7 @@ stages:
                   --namespace monitoring \
                   --values k8s/monitoring/prometheus-values.yaml \
                   --set grafana.adminPassword="$GRAFANA_PASS" \
-                  --atomic \
-                  --timeout 8m \
+                  --timeout 15m \
                   --wait
 
                 # Aplicar ServiceMonitor para suma-proxy

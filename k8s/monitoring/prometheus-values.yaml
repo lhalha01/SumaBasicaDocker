@@ -238,17 +238,6 @@ grafana:
     users:
       allow_sign_up: false
 
-  # Datasource explícito con UID fijo para que los dashboards lo encuentren
-  additionalDataSources:
-    - name: Prometheus
-      type: prometheus
-      uid: prometheus
-      url: http://kube-prometheus-stack-prometheus.monitoring:9090
-      access: proxy
-      isDefault: true
-      jsonData:
-        timeInterval: "30s"
-
 prometheus:
   prometheusSpec:
     # Permite descubrir ServiceMonitors de cualquier namespace
