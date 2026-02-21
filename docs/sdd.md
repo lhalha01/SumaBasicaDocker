@@ -48,48 +48,39 @@
 
 ## 2. Arquitectura
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     CLIENTE (navegador)                       │
-│           index.html + script.js + styles.css                 │
-│    POST /suma-n-digitos  GET /terminal-stream  GET /docs-url  │
-└────────────────────────┬─────────────────────────────────────┘
-                         │ HTTP :8080
-                         ▼
-┌──────────────────────────────────────────────────────────────┐
-│           NAMESPACE: calculadora-suma                         │
-│                                                               │
-│  ┌───────────────────────────────────────────────────────┐   │
-│  │  suma-proxy  (Deployment, 1 réplica, imagen ACR)      │   │
-│  │  proxy.py + k8s_orchestrator.py                       │   │
-│  │  ServiceAccount: suma-proxy (RBAC: get/list/scale     │   │
-│  │  deployments, pods, services, endpoints,              │   │
-│  │  endpointslices en calculadora-suma;                  │   │
-│  │  get/list services en monitoring)                     │   │
-│  └──────┬────────────────────────────────────────────────┘   │
-│         │ kubectl scale / port-forward / wait                 │
-│         ▼                                                     │
-│  ┌──────────────────────────────────────────────────────┐    │
-│  │  suma-digito-{0..3}  (4 Deployments, 0→1 réplicas)  │    │
-│  │  imagen: ghcr.io/lhalha01/contenedores-backend:latest│    │
-│  │  puerto: 8000  endpoint: POST /suma                  │    │
-│  └──────────────────────────────────────────────────────┘    │
-│                                                               │
-│  suma-docs  (Deployment, 1 réplica, imagen ACR)               │
-│  nginx sirviendo site MkDocs — puerto 8080 → LB              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+graph TD
+    CLI["🌐 Cliente\nindex.html · script.js · styles.css"]
 
-┌─────────────────────────────────────────────────────────────┐
-│           NAMESPACE: monitoring                              │
-│  kube-prometheus-stack (Helm)                               │
-│    Prometheus  - scrape via ServiceMonitor                  │
-│    Grafana     - dashboard personalizado (hardcoded UID)    │
-└─────────────────────────────────────────────────────────────┘
+    subgraph azure["☁️ Azure — AHL_resources"]
+        subgraph aks["AKS: KSuma  Standard_B2s"]
+            subgraph ns_calc["namespace: calculadora-suma"]
+                PROXY["suma-proxy\nFlask :8080\nacrsuma.azurecr.io/suma-proxy"]
+                D0["suma-digito-0\n:8000  replicas=0"]
+                D1["suma-digito-1\n:8000  replicas=0"]
+                D2["suma-digito-2\n:8000  replicas=0"]
+                D3["suma-digito-3\n:8000  replicas=0"]
+                DOCS["suma-docs\nnginx :8080\nacrsuma.azurecr.io/suma-docs"]
+            end
+            subgraph ns_mon["namespace: monitoring"]
+                PROM["Prometheus\nkube-prometheus-stack"]
+                GRAFANA["Grafana\nLoadBalancer"]
+            end
+        end
+        ACR["📦 ACR\nacrsuma.azurecr.io"]
+        KV["🔑 Key Vault\nAHLSecretos"]
+    end
 
-Infraestructura Azure:
-  AKS: KSuma (resource group AHL_resources, Standard_B2s)
-  ACR: acrsuma.azurecr.io
-  Key Vault: AHLSecretos
+    CLI -->|"HTTP :80  POST /suma-n-digitos"| PROXY
+    CLI -->|"GET /terminal-stream SSE"| PROXY
+    CLI -->|"HTTP :80"| DOCS
+    CLI -->|"HTTP :80"| GRAFANA
+    PROXY -->|"kubectl scale/wait\nin-cluster DNS"| D0 & D1 & D2 & D3
+    PROM -->|"scrape /metrics cada 15 s"| PROXY
+    GRAFANA -->|"PromQL"| PROM
+    ACR -->|"imagePull Managed Identity"| PROXY
+    ACR -->|"imagePull Managed Identity"| DOCS
+    KV -->|"grafana-admin-password"| GRAFANA
 ```
 
 ---
@@ -138,14 +129,18 @@ ops_by_pods = Counter(
 ```
 
 **Función de suma completa**:
-```
-digitos_a = descomponer(A)   # derecha a izquierda
-digitos_b = descomponer(B)   # rellenar con 0 hasta mismo tamaño
-carry = 0
-para i en 0..num_digitos-1:
-    {result, carry} = POST suma-digito-{i}/suma({a[i], b[i], carry})
-resultado = [carry] + [r[n-1]..r[0]]  si carry > 0
-          = [r[n-1]..r[0]]            si carry == 0
+
+```mermaid
+flowchart TD
+    IN["POST /suma-n-digitos\n{NumberA, NumberB}"] --> DEC
+    DEC["Descomponer dígitos\ndigitos_a = A derecha→izquierda\ndigitos_b = B relleno con 0"] --> LOOP
+    subgraph LOOP["Loop i = 0 .. num_digitos-1"]
+        SI["POST suma-digito-i/suma\n{a_i, b_i, carry_in}"] --> RES
+        RES["result_i = suma % 10\ncarry_out = suma / 10"] --> NXT["carry_in = carry_out\ni++"]
+    end
+    LOOP --> BUILD
+    BUILD{"¿carry final > 0?"}  -->|Si| RYES["resultado = carry + r3r2r1r0"]
+    BUILD -->|No| RNO["resultado = r3r2r1r0"]
 ```
 
 ---
@@ -353,9 +348,15 @@ Vacía el buffer de logs. **Response**: `{ "ok": true }`
 
 ### Descomposición en dígitos
 
-```
-número 1234 → [4, 3, 2, 1]  (índice 0 = unidades, índice 3 = millares)
-número 56   → [6, 5, 0, 0]  (relleno con ceros hasta len(A))
+```mermaid
+flowchart LR
+    A1["A = 1234"] -->|"índice 0"| U0["4 — Unidades\npuerto 31000"]
+    A1 -->|"índice 1"| U1["3 — Decenas\npuerto 31001"]
+    A1 -->|"índice 2"| U2["2 — Centenas\npuerto 31002"]
+    A1 -->|"índice 3"| U3["1 — Millares\npuerto 31003"]
+    B1["B = 0056"] -->|"relleno con 0"| U0
+    B1 -->|"relleno con 0"| U1
+    B1 -->|"índice 0"| U0
 ```
 
 ### Posiciones
@@ -367,15 +368,35 @@ número 56   → [6, 5, 0, 0]  (relleno con ceros hasta len(A))
 | 2 | Centenas | 31002 |
 | 3 | Millares | 31003 |
 
-### Carry propagation
+### Carry propagation — ejemplo 1234 + 5678
 
-```
-carry_0 = 0
-(r0, carry_1) = suma(a0, b0, carry_0)
-(r1, carry_2) = suma(a1, b1, carry_1)
-(r2, carry_3) = suma(a2, b2, carry_2)
-(r3, carry_4) = suma(a3, b3, carry_3)
-resultado = [carry_4? carry_4 : ""] + str(r3) + str(r2) + str(r1) + str(r0)
+```mermaid
+flowchart LR
+    C0["carry₀ = 0"] --> S0
+
+    subgraph S0["suma-digito-0  Unidades"]
+        OP0["4 + 8 + 0 = 12\nr₀ = 2  carry₁ = 1"]
+    end
+
+    S0 -->|"carry₁=1"| S1
+
+    subgraph S1["suma-digito-1  Decenas"]
+        OP1["3 + 7 + 1 = 11\nr₁ = 1  carry₂ = 1"]
+    end
+
+    S1 -->|"carry₂=1"| S2
+
+    subgraph S2["suma-digito-2  Centenas"]
+        OP2["2 + 6 + 1 = 9\nr₂ = 9  carry₃ = 0"]
+    end
+
+    S2 -->|"carry₃=0"| S3
+
+    subgraph S3["suma-digito-3  Millares"]
+        OP3["1 + 5 + 0 = 6\nr₃ = 6  carry₄ = 0"]
+    end
+
+    S3 -->|"carry₄=0"| RES["✅ Resultado: 6912"]
 ```
 
 ---
@@ -383,6 +404,25 @@ resultado = [carry_4? carry_4 : ""] + str(r3) + str(r2) + str(r1) + str(r0)
 ## 6. Infraestructura en Azure
 
 ### `infra/terraform/`
+
+```mermaid
+graph TD
+    SUB["Azure Subscription"] --> RG
+
+    subgraph RG["📁 Resource Group: AHL_resources  eastus"]
+        AKS["☸️ AKS: KSuma\nStandard_B2s · 2 nodos\nSystemAssigned Identity"]
+        ACR["📦 ACR: acrsuma\nBasic SKU\nadmin disabled"]
+        KV["🔑 Key Vault: AHLSecretos\nStandard SKU"]
+        RA["🔗 Role Assignment\nAcrPull"]
+    end
+
+    AKS -->|"kubelet identity"| RA
+    RA -->|"AcrPull sobre"| ACR
+    AKS -->|"acceso secretos vía\nAccess Policy"| KV
+    PIPE["🔧 Azure DevOps Pipeline"] -->|"AzureKeyVault@2\nlectura secretos"| KV
+    PIPE -->|"az acr build\npush imágenes"| ACR
+    PIPE -->|"az aks get-credentials\nkubectl apply"| AKS
+```
 
 | Recurso | Tipo | Configuración |
 |---|---|---|
@@ -626,7 +666,58 @@ kubectl create secret docker-registry ghcr-secret \
 **Trigger**: rama `main` (⚠ pendiente actualizar a `master`/`FrontalSuma`)  
 **Azure DevOps**: `https://dev.azure.com/STAFFLABS/LabsDevops/_git/SumaBasicaDocker`
 
-### Etapas
+### Diagrama de etapas
+
+```mermaid
+flowchart TD
+    PUSH["🔀 Push rama main"] --> S1
+
+    subgraph S1["Stage 1 — TerraformPlan"]
+        T1["terraform init / validate / plan"]
+        T2["helm upgrade kube-prometheus-stack\n--timeout 15m --wait"]
+        T3["kubectl apply servicemonitor-proxy.yaml"]
+        T1 --> T2 --> T3
+    end
+
+    subgraph S2["Stage 2 — CodeQuality"]
+        Q1["AzureKeyVault → SONARTOKEN\nSLACKWEBHOOKURL"]
+        Q2["SonarCloud análisis\norg: lhalha01"]
+        Q3["Notificación Slack\n(try/except — no bloquea)"]
+        Q1 --> Q2 --> Q3
+    end
+
+    subgraph S3["Stage 3 — BuildAndScan"]
+        B1["az acr build suma-proxy:BuildId"]
+        B2["Trivy scan imagen\nfalla si CRITICAL"]
+        B3["Trivy scan IaC\nfalla si HIGH/CRITICAL"]
+        B1 --> B2 --> B3
+    end
+
+    subgraph S4["Stage 4 — DocsGenerate"]
+        D1["az acr build suma-docs:BuildId"]
+        D2["pytest-cov → coverage.md"]
+        D3["git-cliff → changelog.md"]
+        D1 --> D2 --> D3
+    end
+
+    subgraph S5["Stage 5 — Deploy"]
+        E1["az aks get-credentials"]
+        E2["kubectl apply k8s/"]
+        E3["kubectl set image proxy + docs"]
+        E4["kubectl rollout status"]
+        E1 --> E2 --> E3 --> E4
+    end
+
+    subgraph S6["Stage 6 — IntegrationTest"]
+        I1["curl LB IP\nPOST /suma-n-digitos"]
+        I2["✅ Verificar respuesta 200"]
+        I1 --> I2
+    end
+
+    S1 --> S2 --> S3 --> S4 --> S5 --> S6
+```
+
+### Detalle de etapas
 
 #### Stage 1: `TerraformPlan`
 - Instala Terraform 1.6.6
@@ -778,23 +869,34 @@ spec:
 
 ### Diagrama de seguridad por capa
 
-```
-Internet
-  │ HTTPS / HTTP
-  ▼
-LoadBalancer (Azure)
-  │
-  ▼
-suma-proxy pod
-  ├── runAsUser: 1000, readOnly FS
-  ├── ServiceAccount suma-proxy (RBAC mínimo)
-  └── /tmp montado como emptyDir (única escritura permitida)
-       │ kubectl (in-cluster)
-       ▼
-suma-digito-{0..3} pods
-  ├── runAsUser: 1000, readOnly FS
-  ├── Sin ServiceAccount con permisos
-  └── imagePullSecret: ghcr-secret
+```mermaid
+graph TD
+    USER["🌐 Internet / Cliente HTTP"]
+    LB["☁️ Azure Load Balancer\nIP pública"]
+
+    subgraph PROXY_POD["Pod: suma-proxy"]
+        SP["runAsUser: 1000\nreadOnlyRootFilesystem: true\ndrop ALL capabilities\nseccompProfile: RuntimeDefault"]
+        SA["ServiceAccount: suma-proxy\nRBAC: scale/get/list deployments\n      get/list pods, endpoints, services"]
+        TMP["/tmp emptyDir\nÚnica ruta de escritura"]
+    end
+
+    subgraph BACKEND_PODS["Pods: suma-digito-0..3"]
+        SB["runAsUser: 1000\nreadOnlyRootFilesystem: true\ndrop ALL capabilities\nseccompProfile: RuntimeDefault"]
+        GS["imagePullSecret: ghcr-secret"]
+    end
+
+    subgraph SUPPLY["Cadena de suministro"]
+        ACR["📦 ACR acrsuma\nTrivy scan  sin CRITICAL\nManagedIdentity AcrPull"]
+        GHCR["📦 GHCR\nghcr.io/lhalha01/contenedores-backend"]
+    end
+
+    KV["🔑 Key Vault AHLSecretos\nSecretos nunca en código"]
+
+    USER --> LB --> SP
+    SP -->|"kubectl in-cluster RBAC"| SB
+    ACR -->|"Managed Identity pull"| SP
+    GHCR -->|"ghcr-secret pull"| SB
+    KV -->|"pipeline CI/CD únicamente"| SP
 ```
 
 ### Key Vault `AHLSecretos` — secretos requeridos
@@ -921,36 +1023,46 @@ EXPOSE 8080
 
 ## 13. Flujo completo de una operación
 
-**Ejemplo**: `1234 + 5678`
+**Ejemplo**: `1234 + 5678 = 6912`
 
-```
-1. Cliente POST /suma-n-digitos {"NumberA":1234, "NumberB":5678}
-2. proxy.py descompone:
-     digitos_a = [4,3,2,1]
-     digitos_b = [8,7,6,5]
-     num_digitos = 4
+```mermaid
+sequenceDiagram
+    actor Cliente
+    participant Proxy as suma-proxy
+    participant Orch as K8sOrchestrator
+    participant K8s as Kubernetes API
+    participant D0 as suma-digito-0
+    participant D1 as suma-digito-1
+    participant D2 as suma-digito-2
+    participant D3 as suma-digito-3
 
-3. Para i=0..3:
-   a. kubectl scale deployment suma-digito-{i} --replicas=1
-   b. kubectl wait --for=condition=ready pod -l app=suma-backend,digito={i} --timeout=60s
-   c. Verificar endpoints del Service (hasta 30s)
-   d. kubectl port-forward svc/suma-digito-{i} 3100{i}:8000 (si in_cluster=false)
+    Cliente->>Proxy: POST /suma-n-digitos {1234, 5678}
+    Proxy->>Proxy: descomponer A=[4,3,2,1]  B=[8,7,6,5]
 
-4. Cascada de sumas (carry propagation):
-   i=0: POST suma-digito-0/suma {4,8,0} → {2, carry=1}
-   i=1: POST suma-digito-1/suma {3,7,1} → {1, carry=1}
-   i=2: POST suma-digito-2/suma {2,6,1} → {9, carry=0}
-   i=3: POST suma-digito-3/suma {1,5,0} → {6, carry=0}
-   resultado = "6912"
+    loop i = 0..3  escalar y esperar
+        Proxy->>Orch: escalar_pod(i, replicas=1)
+        Orch->>K8s: kubectl scale suma-digito-i --replicas=1
+        Orch->>K8s: kubectl wait --for=condition=ready (60 s)
+        Orch->>K8s: poll endpoints  esperar_endpoints_servicio (30 s)
+    end
 
-5. ops_by_pods.labels(pods="4").inc()
+    Proxy->>D0: POST /suma  {A=4, B=8, CarryIn=0}
+    D0-->>Proxy: {Result=2, CarryOut=1}
 
-6. Thread background:
-   sleep(2)
-   kubectl scale suma-digito-{0..3} --replicas=0
+    Proxy->>D1: POST /suma  {A=3, B=7, CarryIn=1}
+    D1-->>Proxy: {Result=1, CarryOut=1}
 
-7. Response 200:
-   {"Result":6912, "CarryOut":0, "NumDigitos":4, ...}
+    Proxy->>D2: POST /suma  {A=2, B=6, CarryIn=1}
+    D2-->>Proxy: {Result=9, CarryOut=0}
+
+    Proxy->>D3: POST /suma  {A=1, B=5, CarryIn=0}
+    D3-->>Proxy: {Result=6, CarryOut=0}
+
+    Proxy->>Proxy: ops_by_pods.labels(pods=4).inc()
+    Proxy-->>Cliente: {Result:6912, CarryOut:0, NumDigitos:4, ...}
+
+    Note over Proxy,K8s: Thread background — delay 2 s
+    Proxy->>K8s: kubectl scale suma-digito-0..3 --replicas=0
 ```
 
 ---
