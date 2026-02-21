@@ -31,6 +31,9 @@ theme:
 repo_url: https://github.com/lhalha01/SumaBasicaDocker
 repo_name: lhalha01/SumaBasicaDocker
 
+extra_css:
+  - stylesheets/extra.css
+
 plugins:
   - search
   - mermaid2

@@ -1,0 +1,10 @@
+/* Hide left navigation sidebar — two-column layout: content + TOC only */
+.md-sidebar--primary {
+  display: none;
+}
+
+/* Expand content area to fill the space left by hidden sidebar */
+.md-content {
+  margin-left: 0 !important;
+  max-width: 100%;
+}
