@@ -22,7 +22,6 @@ theme:
         name: Modo claro
   features:
     - navigation.tabs
-    - navigation.sections
     - navigation.top
     - search.highlight
     - content.code.copy
@@ -31,6 +30,9 @@ theme:
 
 repo_url: https://github.com/lhalha01/SumaBasicaDocker
 repo_name: lhalha01/SumaBasicaDocker
+
+extra_css:
+  - stylesheets/extra.css
 
 plugins:
   - search
@@ -58,6 +60,7 @@ nav:
   - API Reference:
     - proxy.py: api/proxy.md
     - k8s_orchestrator.py: api/orchestrator.md
+  - Diseño del Sistema (SDD): sdd.md
   - Calidad de Código: sonarcloud.md
   - Changelog: changelog.md
   - Cobertura de Tests: coverage.md

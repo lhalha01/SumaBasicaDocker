@@ -10,18 +10,21 @@ RUN pip install --no-cache-dir \
     pdoc \
     pytest \
     pytest-cov \
-    flask \
-    flask-cors \
-    requests
+    flask==3.0.3 \
+    flask-cors==4.0.2 \
+    requests==2.32.3 \
+    prometheus-flask-exporter==0.23.1 \
+    "jaraco.context==6.1.0" \
+    wheel==0.46.2
 
 # Copiar código fuente y documentación
 COPY . .
 
-# Generar API Reference con pdoc (stdout → markdown file)
-RUN pdoc proxy --format markdown > docs/api/proxy.md 2>/dev/null || \
-    echo "# proxy.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/proxy.md
-RUN pdoc k8s_orchestrator --format markdown > docs/api/orchestrator.md 2>/dev/null || \
-    echo "# k8s_orchestrator.py\n\n> Documentación no disponible (error en pdoc)." > docs/api/orchestrator.md
+# Generar API Reference con pdoc
+RUN pdoc proxy --format markdown > docs/api/proxy.md || \
+    printf '# proxy.py\n\n> Documentación no disponible (error en pdoc).\n' > docs/api/proxy.md
+RUN pdoc k8s_orchestrator --format markdown > docs/api/orchestrator.md || \
+    printf '# k8s_orchestrator.py\n\n> Documentación no disponible (error en pdoc).\n' > docs/api/orchestrator.md
 
 # Copiar README como página de inicio (evita depender del plugin snippets en runtime)
 RUN cp README.md docs/index.md

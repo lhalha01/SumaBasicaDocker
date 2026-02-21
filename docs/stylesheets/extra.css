@@ -1,0 +1,22 @@
+/* Hide left navigation sidebar */
+.md-sidebar--primary {
+  display: none;
+}
+
+/* Move TOC to left at 25% using flex */
+.md-sidebar--secondary {
+  order: -1;
+  flex: 0 0 25%;
+  width: 25%;
+  max-width: 25%;
+  min-width: 0;
+}
+
+/* Content fills remaining 75% */
+.md-content {
+  flex: 1 1 75%;
+  max-width: 75%;
+  min-width: 0;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
