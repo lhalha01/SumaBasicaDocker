@@ -254,9 +254,59 @@ stages:
                 PYEOF
                 true
 
+  - stage: Testing
+    displayName: 'Unit & Integration Tests'
+    dependsOn: CodeQuality
+    jobs:
+      - job: RunTests
+        displayName: 'pytest + coverage'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - task: Bash@3
+            displayName: 'Install dependencies'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
+                python3 -m pip install --upgrade pip
+                pip install -r requirements.txt -r requirements-test.txt
+
+          - task: Bash@3
+            displayName: 'Run pytest with coverage'
+            inputs:
+              targetType: 'inline'
+              script: |
+                set -euo pipefail
+                python3 -m pytest tests/ \
+                  --cov=proxy \
+                  --cov=k8s_orchestrator \
+                  --cov-report=xml:coverage.xml \
+                  --cov-report=term-missing \
+                  --cov-fail-under=70 \
+                  --junit-xml=test-results.xml \
+                  -v
+
+          - task: PublishTestResults@2
+            displayName: 'Publish test results'
+            condition: always()
+            inputs:
+              testResultsFormat: 'JUnit'
+              testResultsFiles: 'test-results.xml'
+              testRunTitle: 'SumaBasicaDocker Tests'
+              failTaskOnFailedTests: true
+
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish coverage report'
+            condition: always()
+            inputs:
+              summaryFileLocation: 'coverage.xml'
+
   - stage: BuildAndPush
     displayName: 'Build and Push Proxy Image'
-    dependsOn: CodeQuality
+    dependsOn: Testing
     jobs:
       - job: BuildPush
         pool:
