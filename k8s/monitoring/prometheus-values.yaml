@@ -6,7 +6,7 @@ grafana:
   persistence:
     enabled: false
   defaultDashboardsEnabled: true
-  adminPassword: ""  # sobreescrito desde Key Vault en la pipeline
+  # adminPassword se inyecta en la pipeline via --set desde Key Vault
   grafana.ini:
     server:
       root_url: "%(protocol)s://%(domain)s/"
