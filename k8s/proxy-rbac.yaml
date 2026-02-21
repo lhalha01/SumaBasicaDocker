@@ -33,3 +33,28 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
   name: suma-proxy-role
+---
+# Permite al proxy leer servicios en namespace monitoring (para resolver IP de Grafana)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: suma-proxy-monitoring-reader
+  namespace: monitoring
+rules:
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: suma-proxy-monitoring-rolebinding
+  namespace: monitoring
+subjects:
+  - kind: ServiceAccount
+    name: suma-proxy
+    namespace: calculadora-suma
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: suma-proxy-monitoring-reader
