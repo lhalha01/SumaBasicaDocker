@@ -63,6 +63,50 @@ stages:
                   -var="existing_aks_name=$(aksClusterName)" \
                   -var="kubelet_identity_object_id=$(AKS_KUBELET_OBJECT_ID)"
 
+          - task: AzureCLI@2
+            displayName: 'Helm install kube-prometheus-stack (idempotente)'
+            inputs:
+              azureSubscription: '$(azureServiceConnection)'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                set -euo pipefail
+                az aks get-credentials -g "$(resourceGroup)" -n "$(aksClusterName)" --overwrite-existing
+
+                # Instalar Helm si no está disponible
+                if ! command -v helm &>/dev/null; then
+                  curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+                fi
+
+                helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+                helm repo update
+
+                kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+                # Obtener password de Grafana desde Key Vault (fallback a valor por defecto)
+                GRAFANA_PASS=$(az keyvault secret show \
+                  --vault-name "$(keyVaultName)" \
+                  --name "grafana-admin-password" \
+                  --query value -o tsv 2>/dev/null || echo "SumaAdmin2026!")
+
+                helm upgrade --install kube-prometheus-stack \
+                  prometheus-community/kube-prometheus-stack \
+                  --namespace monitoring \
+                  --values k8s/monitoring/prometheus-values.yaml \
+                  --set grafana.adminPassword="$GRAFANA_PASS" \
+                  --atomic \
+                  --timeout 8m \
+                  --wait
+
+                # Aplicar ServiceMonitor para suma-proxy
+                kubectl apply -f k8s/monitoring/servicemonitor-proxy.yaml
+
+                echo "✓ kube-prometheus-stack listo en namespace monitoring"
+                echo "Grafana LoadBalancer:"
+                kubectl get svc -n monitoring kube-prometheus-stack-grafana \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' || true
+                echo ""
+
   - stage: CodeQuality
     displayName: 'SonarCloud Code Quality'
     dependsOn: TerraformPlan

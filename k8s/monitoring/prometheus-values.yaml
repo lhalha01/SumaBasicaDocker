@@ -1,0 +1,48 @@
+grafana:
+  enabled: true
+  service:
+    type: LoadBalancer
+    port: 80
+  persistence:
+    enabled: false
+  defaultDashboardsEnabled: true
+  adminPassword: ""  # sobreescrito desde Key Vault en la pipeline
+  grafana.ini:
+    server:
+      root_url: "%(protocol)s://%(domain)s/"
+    auth.anonymous:
+      enabled: false
+
+prometheus:
+  prometheusSpec:
+    # Permite descubrir ServiceMonitors de cualquier namespace
+    serviceMonitorSelectorNilUsesHelmValues: false
+    serviceMonitorSelector: {}
+    serviceMonitorNamespaceSelector: {}
+    retention: 15d
+    resources:
+      requests:
+        memory: 512Mi
+        cpu: 250m
+      limits:
+        memory: 1Gi
+        cpu: 500m
+
+alertmanager:
+  enabled: false
+
+nodeExporter:
+  enabled: true
+
+kubeStateMetrics:
+  enabled: true
+
+# No necesitamos PVC persistente en entorno de lab
+prometheusOperator:
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+    limits:
+      memory: 256Mi
+      cpu: 200m

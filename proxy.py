@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify, make_response, send_from_directory, Response, stream_with_context
 from flask_cors import CORS
+from prometheus_flask_exporter import PrometheusMetrics
 import requests
 import os
 import signal
@@ -12,6 +13,8 @@ from k8s_orchestrator import K8sOrchestrator
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS"], "allow_headers": ["Content-Type"]}})
+metrics = PrometheusMetrics(app, path='/metrics')
+metrics.info('suma_proxy_info', 'SumaBasicaDocker proxy service', version='1.0.0')
 
 # Shutdown flag — set by SIGTERM so SSE streams exit cleanly
 _shutdown = threading.Event()
